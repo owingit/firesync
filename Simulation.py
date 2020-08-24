@@ -95,13 +95,22 @@ class Simulation:
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.agent_array, firefly_paths),
                              interval=250, blit=False)
-        anim.save('anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}.gif'.format(
+        now = datetime.now()
+        anim.save('data/anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}/gif.gif'.format(
             self.total_agents,
             self.n, self.n,
             self.coupling_strength,
             self.steps,
             self.r_or_u,
-            datetime.now()
+            now
+        ))
+        anim.save('data/anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}/movie.mp4'.format(
+            self.total_agents,
+            self.n, self.n,
+            self.coupling_strength,
+            self.steps,
+            self.r_or_u,
+            now
         ))
 
         plt.show()
