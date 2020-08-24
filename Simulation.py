@@ -95,7 +95,7 @@ class Simulation:
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.agent_array, firefly_paths),
                              interval=250, blit=False)
-        anim.save('anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}.mp4'.format(
+        anim.save('anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}.gif'.format(
             self.total_agents,
             self.n, self.n,
             self.coupling_strength,
