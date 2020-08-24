@@ -94,17 +94,9 @@ class Simulation:
         ax.set_ylabel('Y')
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.agent_array, firefly_paths),
-                             interval=250, blit=False)
+                             interval=100, blit=False)
         now = datetime.now()
         anim.save('data/anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
-            self.total_agents,
-            self.n, self.n,
-            self.coupling_strength,
-            self.steps,
-            self.r_or_u,
-            now
-        ))
-        anim.save('data/anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_movie.mov'.format(
             self.total_agents,
             self.n, self.n,
             self.coupling_strength,
