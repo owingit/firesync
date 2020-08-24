@@ -104,7 +104,7 @@ class Simulation:
             self.r_or_u,
             now
         ))
-        anim.save('data/anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_movie.mp4'.format(
+        anim.save('data/anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_movie.mov'.format(
             self.total_agents,
             self.n, self.n,
             self.coupling_strength,
