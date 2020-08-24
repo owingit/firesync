@@ -3,6 +3,7 @@ import Simulation
 import math
 import matplotlib.pyplot as plt
 import collections
+from datetime import datetime
 
 
 def main():
@@ -22,9 +23,9 @@ def main():
                                                coupling_strength=coupling_strength,
                                                r_or_u="random")
             simulation.run()
-            for firefly in simulation.agent_array:
-                print(firefly.phase)
-            simulation.animate_walk()
+            now = datetime.now()
+            simulation.animate_phase_bins(now)
+            simulation.animate_walk(now)
 
 
 if __name__ == "__main__":

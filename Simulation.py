@@ -6,7 +6,6 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib.ticker import FixedLocator, FixedFormatter
-from datetime import datetime
 
 import math
 import statistics
@@ -20,7 +19,7 @@ class Simulation:
         self.n = side_length
         self.coupling_strength = coupling_strength
         self.steps = step_count
-        self.agent_array = []
+        self.firefly_array = []
         self.r_or_u = r_or_u
         self.tstar_seed = thetastar
         thetastars = [np.linspace(-thetastar, thetastar, simulation_helpers.TSTAR_RANGE)]
@@ -28,41 +27,78 @@ class Simulation:
         self.has_run = False
 
         for i in range(0, self.total_agents):
-            self.agent_array.append(Firefly.Firefly(
+            self.firefly_array.append(Firefly.Firefly(
                 i, total=self.total_agents, tstar=self.thetastar,
                 tstar_range=simulation_helpers.TSTAR_RANGE,
                 n=self.n, steps=self.steps, r_or_u=self.r_or_u,
                 use_periodic_boundary_conditions=False)
             )
+
+        self.num_fireflies_with_phase_x = collections.OrderedDict()
         self.init_stats()
 
     def init_stats(self):
-        print("Stats Initialized")
-        # TODO
+        for i in range(self.steps):
+            self.num_fireflies_with_phase_x[i] = {key: 0 for key in range(0, 360)}
+        for firefly in self.firefly_array:
+            phase_in_degrees = int(math.degrees(firefly.phase[0]))
+            self.num_fireflies_with_phase_x[0][phase_in_degrees] += 1
 
     def run(self):
-        num_agents = len(self.agent_array)
+        num_agents = len(self.firefly_array)
         for step in range(1, self.steps):
-            for firefly in self.agent_array:
+            for firefly in self.firefly_array:
                 firefly.move(step)
             for i in range(0, num_agents):
-                ff = self.agent_array[i]
+                ff_i = self.firefly_array[i]
                 for j in range(i, num_agents-1):
-                    j = j+1
-                    ff_2 = self.agent_array[j]
-                    dist = ((ff_2.positionx[step] - ff.positionx[step]) ** 2 +
-                            (ff_2.positiony[step] - ff.positiony[step]) ** 2) ** 0.5
-                    kuramato = math.sin(ff_2.phase[step-1] - ff.phase[step-1]) / dist
-                    kuramato_2 = math.sin(ff.phase[step-1] - ff_2.phase[step-1]) / dist
+                    j += 1
+                    ff_j = self.firefly_array[j]
+                    dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
+                            (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
+                    kuramato = math.sin(ff_j.phase[step-1] - ff_i.phase[step-1]) / dist
+                    kuramato_2 = math.sin(ff_i.phase[step-1] - ff_j.phase[step-1]) / dist
 
-                    ff.phase[step] = ff.phase[step-1] + (self.coupling_strength * kuramato)
-                    ff.phase[step] = ff.phase[step] % math.radians(360)
-                    ff_2.phase[step] = ff_2.phase[step-1] + (self.coupling_strength * kuramato_2)
-                    ff_2.phase[step] = ff_2.phase[step] % math.radians(360)
+                    ff_i.phase[step] = ff_i.phase[step-1] + (self.coupling_strength * kuramato)
+                    ff_i.phase[step] = ff_i.phase[step] % math.radians(360)
+                    ff_j.phase[step] = ff_j.phase[step-1] + (self.coupling_strength * kuramato_2)
+                    ff_j.phase[step] = ff_j.phase[step] % math.radians(360)
+                phase_key = int(math.degrees(ff_i.phase[step]))
+                self.num_fireflies_with_phase_x[step][phase_key] += 1
 
         self.has_run = True
 
-    def animate_walk(self):
+    def animate_phase_bins(self, now):
+        assert self.has_run, "Animation cannot render until the simulation has been run!"
+        plt.style.use('seaborn-pastel')
+        num_bins = 360
+        fig = plt.figure()
+        ax = plt.axes(xlim=(0, num_bins), ylim=(0, self.total_agents+1))
+        ax.set_xlim([0.0, 360])
+        ax.set_xlabel('Phase theta in degrees')
+
+        ax.set_ylim([0.0, self.total_agents+1])
+        ax.set_ylabel('Num agents')
+        rects = ax.bar(range(num_bins), self.num_fireflies_with_phase_x[0].values(), align='center', color='blue')
+
+        def animate(i, data):
+            for rect, n in zip(rects, data[i].keys()):
+                rect.set_height(data[i][n])
+            ax.set_title('Num agents with particular phase at step {}'.format(i))
+
+        anim = FuncAnimation(fig, animate, frames=self.steps, fargs=[self.num_fireflies_with_phase_x],
+                             interval=25, blit=False, repeat=False)
+        anim.save('data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
+            self.total_agents,
+            self.n, self.n,
+            self.coupling_strength,
+            self.steps,
+            self.r_or_u,
+            now
+        ))
+        # plt.show()
+
+    def animate_walk(self, now):
         assert self.has_run, "Animation cannot render until the simulation has been run!"
         plt.style.use('seaborn-pastel')
         fig = plt.figure()
@@ -72,7 +108,7 @@ class Simulation:
         xdatas = {n: [] for n in range(0, self.total_agents)}
         ydatas = {n: [] for n in range(0, self.total_agents)}
 
-        firefly_paths = [ax.plot([], [], '*')[0] for _ in self.agent_array]
+        firefly_paths = [ax.plot([], [], '*')[0] for _ in self.firefly_array]
 
         # TODO: set color by phase
         def animate(i, flies, lines):
@@ -93,10 +129,10 @@ class Simulation:
         ax.set_ylim([0.0, self.n])
         ax.set_ylabel('Y')
 
-        anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.agent_array, firefly_paths),
+        anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.firefly_array, firefly_paths),
                              interval=100, blit=False)
-        now = datetime.now()
-        anim.save('data/anim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
+
+        anim.save('data/phaseanim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
             self.total_agents,
             self.n, self.n,
             self.coupling_strength,
@@ -104,8 +140,7 @@ class Simulation:
             self.r_or_u,
             now
         ))
-
-        plt.show()
+        # plt.show()
 
     @staticmethod
     def setup_color_legend(axis):
