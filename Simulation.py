@@ -76,6 +76,11 @@ class Simulation:
         ax = plt.axes(xlim=(0, num_bins), ylim=(0, self.total_agents+1))
         ax.set_xlim([0.0, 360])
         ax.set_xlabel('Phase theta in degrees')
+        x_formatter = FixedFormatter([
+            "0°", "45°", "90°", "135°", "180°", "225°", "270°", "315°", "360°"])
+        x_locator = FixedLocator([0, 45, 90, 135, 180, 225, 270, 315, 360])
+        ax.xaxis.set_major_formatter(x_formatter)
+        ax.xaxis.set_major_locator(x_locator)
 
         ax.set_ylim([0.0, self.total_agents+1])
         ax.set_ylabel('Num agents')
@@ -88,15 +93,15 @@ class Simulation:
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=[self.num_fireflies_with_phase_x],
                              interval=25, blit=False, repeat=False)
-        anim.save('data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
-            self.total_agents,
-            self.n, self.n,
-            self.coupling_strength,
-            self.steps,
-            self.r_or_u,
-            now
-        ))
-        # plt.show()
+        # anim.save('data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
+        #     self.total_agents,
+        #     self.n, self.n,
+        #     self.coupling_strength,
+        #     self.steps,
+        #     self.r_or_u,
+        #     now
+        # ))
+        plt.show()
 
     def animate_walk(self, now):
         assert self.has_run, "Animation cannot render until the simulation has been run!"
