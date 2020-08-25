@@ -10,7 +10,8 @@ class Firefly:
     #  Number, total number, theta*, thetastar_range, box dimension, number of steps,
     #  starting distribution, whether initially fed, whether to use periodic boundary conditions
     def __init__(self, i, total, tstar, tstar_range,
-                 n, steps, r_or_u, use_periodic_boundary_conditions=True):
+                 n, steps, r_or_u,
+                 natural_frequency, use_periodic_boundary_conditions=True):
         self.velocity = 1.0
         self.side_length_of_enclosure = n
         self.positionx = np.zeros(steps)
@@ -27,6 +28,7 @@ class Firefly:
         self.direction_set = False
         self.theta_star = tstar
         self.trace = {0: (self.positionx[0], self.positiony[0])}
+        self.nat_frequency = math.radians(natural_frequency)
 
         self.name = "FF #{}".format(i)
         self.number = i

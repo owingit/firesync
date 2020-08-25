@@ -8,10 +8,10 @@ from datetime import datetime
 
 def main():
     thetastars = [math.pi / 8, math.pi / 4, 2 * math.pi]
-    side_length = 20
+    side_length = 15
     num_agents = 64
     step_count = 1000
-    coupling_strength = 0.1
+    coupling_strength = 0.5
     num_trials = 1
 
     for trial in range(0, num_trials):

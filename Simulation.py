@@ -25,12 +25,16 @@ class Simulation:
         thetastars = [np.linspace(-thetastar, thetastar, simulation_helpers.TSTAR_RANGE)]
         self.thetastar = list(thetastars[random.randint(0, len(thetastars) - 1)])
         self.has_run = False
+        natural_frequencies = np.random.standard_cauchy(num_agents)
+        for nf in natural_frequencies:
+            nf *= 360
 
         for i in range(0, self.total_agents):
             self.firefly_array.append(Firefly.Firefly(
                 i, total=self.total_agents, tstar=self.thetastar,
                 tstar_range=simulation_helpers.TSTAR_RANGE,
                 n=self.n, steps=self.steps, r_or_u=self.r_or_u,
+                natural_frequency=natural_frequencies[i],
                 use_periodic_boundary_conditions=False)
             )
 
@@ -51,18 +55,19 @@ class Simulation:
                 firefly.move(step)
             for i in range(0, num_agents):
                 ff_i = self.firefly_array[i]
-                for j in range(i, num_agents-1):
-                    j += 1
-                    ff_j = self.firefly_array[j]
-                    dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
-                            (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
-                    kuramato = math.sin(ff_j.phase[step-1] - ff_i.phase[step-1]) / dist
-                    kuramato_2 = math.sin(ff_i.phase[step-1] - ff_j.phase[step-1]) / dist
+                kuramato = 0
+                for j in range(0, num_agents):
+                    if i == j:
+                        continue
+                    else:
+                        ff_j = self.firefly_array[j]
+                        dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
+                                (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
+                        kuramato_term = math.sin(ff_j.phase[step-1] - ff_i.phase[step-1]) / dist
+                        kuramato += kuramato_term
 
-                    ff_i.phase[step] = ff_i.phase[step-1] + (self.coupling_strength * kuramato)
-                    ff_i.phase[step] = ff_i.phase[step] % math.radians(360)
-                    ff_j.phase[step] = ff_j.phase[step-1] + (self.coupling_strength * kuramato_2)
-                    ff_j.phase[step] = ff_j.phase[step] % math.radians(360)
+                ff_i.phase[step] = (ff_i.phase[step - 1] + (self.coupling_strength / num_agents) * kuramato)
+                ff_i.phase[step] = (ff_i.nat_frequency + ff_i.phase[step]) % math.radians(360)
                 phase_key = int(math.degrees(ff_i.phase[step]))
                 self.num_fireflies_with_phase_x[step][phase_key] += 1
 
@@ -93,14 +98,14 @@ class Simulation:
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=[self.num_fireflies_with_phase_x],
                              interval=25, blit=False, repeat=False)
-        # anim.save('data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
-        #     self.total_agents,
-        #     self.n, self.n,
-        #     self.coupling_strength,
-        #     self.steps,
-        #     self.r_or_u,
-        #     now
-        # ))
+        anim.save('data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
+            self.total_agents,
+            self.n, self.n,
+            self.coupling_strength,
+            self.steps,
+            self.r_or_u,
+            now
+        ))
         plt.show()
 
     def animate_walk(self, now):
@@ -145,7 +150,7 @@ class Simulation:
             self.r_or_u,
             now
         ))
-        # plt.show()
+        plt.show()
 
     @staticmethod
     def setup_color_legend(axis):
