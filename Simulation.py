@@ -6,9 +6,9 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib.ticker import FixedLocator, FixedFormatter
+from scipy import stats
 
 import math
-import statistics
 from matplotlib.animation import FuncAnimation
 import collections
 
@@ -25,16 +25,18 @@ class Simulation:
         thetastars = [np.linspace(-thetastar, thetastar, simulation_helpers.TSTAR_RANGE)]
         self.thetastar = list(thetastars[random.randint(0, len(thetastars) - 1)])
         self.has_run = False
-        natural_frequencies = np.random.standard_cauchy(num_agents)
-        for nf in natural_frequencies:
-            nf *= 360
+        self.natural_frequencies = []
+        while len(self.natural_frequencies) < num_agents:
+            sample = stats.cauchy.rvs(loc=0, scale=360)
+            if -360 < sample < 360:
+                self.natural_frequencies.append(sample)
 
         for i in range(0, self.total_agents):
             self.firefly_array.append(Firefly.Firefly(
                 i, total=self.total_agents, tstar=self.thetastar,
                 tstar_range=simulation_helpers.TSTAR_RANGE,
                 n=self.n, steps=self.steps, r_or_u=self.r_or_u,
-                natural_frequency=natural_frequencies[i],
+                natural_frequency=self.natural_frequencies[i],
                 use_periodic_boundary_conditions=False)
             )
 
@@ -46,6 +48,8 @@ class Simulation:
             self.num_fireflies_with_phase_x[i] = {key: 0 for key in range(0, 360)}
         for firefly in self.firefly_array:
             phase_in_degrees = int(math.degrees(firefly.phase[0]))
+            if phase_in_degrees < 0:
+                phase_in_degrees += 360
             self.num_fireflies_with_phase_x[0][phase_in_degrees] += 1
 
     def run(self):
@@ -63,17 +67,21 @@ class Simulation:
                         ff_j = self.firefly_array[j]
                         dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
                                 (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
+                        if dist == 0:
+                            continue
                         kuramato_term = math.sin(ff_j.phase[step-1] - ff_i.phase[step-1]) / dist
                         kuramato += kuramato_term
 
-                ff_i.phase[step] = (ff_i.phase[step - 1] + (self.coupling_strength / num_agents) * kuramato)
+                ff_i.phase[step] = (ff_i.phase[step - 1] + self.coupling_strength * kuramato)
                 ff_i.phase[step] = (ff_i.nat_frequency + ff_i.phase[step]) % math.radians(360)
                 phase_key = int(math.degrees(ff_i.phase[step]))
+                if phase_key < 0:
+                    phase_key += 360
                 self.num_fireflies_with_phase_x[step][phase_key] += 1
 
         self.has_run = True
 
-    def animate_phase_bins(self, now):
+    def animate_phase_bins(self, now, write_gif=False, show_gif=False):
         assert self.has_run, "Animation cannot render until the simulation has been run!"
         plt.style.use('seaborn-pastel')
         num_bins = 360
@@ -98,17 +106,19 @@ class Simulation:
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=[self.num_fireflies_with_phase_x],
                              interval=25, blit=False, repeat=False)
-        anim.save('data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
-            self.total_agents,
-            self.n, self.n,
-            self.coupling_strength,
-            self.steps,
-            self.r_or_u,
-            now
-        ))
-        plt.show()
+        if write_gif:
+            anim.save('data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
+                self.total_agents,
+                self.n, self.n,
+                self.coupling_strength,
+                self.steps,
+                self.r_or_u,
+                now
+            ))
+        if show_gif:
+            plt.show()
 
-    def animate_walk(self, now):
+    def animate_walk(self, now, write_gif=False, show_gif=False):
         assert self.has_run, "Animation cannot render until the simulation has been run!"
         plt.style.use('seaborn-pastel')
         fig = plt.figure()
@@ -127,6 +137,8 @@ class Simulation:
                 ydatas[fly.number].append(fly.trace.get(i)[1])
                 line.set_data(xdatas[fly.number][0], ydatas[fly.number][0])
                 deg = math.degrees(fly.phase[i])
+                if deg < 0:
+                    deg += 360
                 line.set_color(color_dict[int(deg)])
                 xdatas[fly.number].pop(0)
                 ydatas[fly.number].pop(0)
@@ -142,15 +154,17 @@ class Simulation:
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.firefly_array, firefly_paths),
                              interval=100, blit=False)
 
-        anim.save('data/phaseanim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
-            self.total_agents,
-            self.n, self.n,
-            self.coupling_strength,
-            self.steps,
-            self.r_or_u,
-            now
-        ))
-        plt.show()
+        if write_gif:
+            anim.save('data/phaseanim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
+                self.total_agents,
+                self.n, self.n,
+                self.coupling_strength,
+                self.steps,
+                self.r_or_u,
+                now
+            ))
+        if show_gif:
+            plt.show()
 
     @staticmethod
     def setup_color_legend(axis):

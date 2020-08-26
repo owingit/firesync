@@ -29,6 +29,7 @@ class Firefly:
         self.theta_star = tstar
         self.trace = {0: (self.positionx[0], self.positiony[0])}
         self.nat_frequency = math.radians(natural_frequency)
+        assert -math.pi * 2 < self.nat_frequency < math.pi * 2
 
         self.name = "FF #{}".format(i)
         self.number = i
@@ -38,7 +39,7 @@ class Firefly:
             self.boundary_conditions = self.non_periodic_boundary_conditions
 
         self.phase = np.zeros(steps)
-        self.phase[0] = random.vonmisesvariate(0, 0)
+        self.phase[0] = self.nat_frequency
 
     def move(self, current_step):
         random_int = random.randint(0, 99)
