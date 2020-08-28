@@ -10,8 +10,7 @@ class Firefly:
     #  Number, total number, theta*, thetastar_range, box dimension, number of steps,
     #  starting distribution, whether initially fed, whether to use periodic boundary conditions
     def __init__(self, i, total, tstar, tstar_range,
-                 n, steps, r_or_u,
-                 natural_frequency, use_periodic_boundary_conditions=True):
+                 n, steps, r_or_u, use_periodic_boundary_conditions=True):
         self.velocity = 1.0
         self.side_length_of_enclosure = n
         self.positionx = np.zeros(steps)
@@ -28,8 +27,11 @@ class Firefly:
         self.direction_set = False
         self.theta_star = tstar
         self.trace = {0: (self.positionx[0], self.positiony[0])}
-        self.nat_frequency = math.radians(natural_frequency)
-        assert -math.pi * 2 < self.nat_frequency < math.pi * 2
+        try:
+            self.nat_frequency = random.vonmisesvariate(1.57, 100)
+            assert 1.40 <= self.nat_frequency < 1.74
+        except AssertionError:
+            self.nat_frequency = 1.57
 
         self.name = "FF #{}".format(i)
         self.number = i
@@ -39,7 +41,7 @@ class Firefly:
             self.boundary_conditions = self.non_periodic_boundary_conditions
 
         self.phase = np.zeros(steps)
-        self.phase[0] = self.nat_frequency
+        self.phase[0] = random.random() * math.pi * 2
 
     def move(self, current_step):
         random_int = random.randint(0, 99)
@@ -65,7 +67,6 @@ class Firefly:
         self.positiony[current_step] = y
         self.boundary_conditions(current_step)
         self.trace[current_step] = (self.positionx[current_step], self.positiony[current_step])
-        self.velocity = 1.0
 
     def periodic_boundary_conditions(self, current_step):
         if self.positionx[current_step] > self.side_length_of_enclosure:

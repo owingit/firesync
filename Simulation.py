@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib.ticker import FixedLocator, FixedFormatter
 from scipy import stats
+import statistics
 
 import math
 from matplotlib.animation import FuncAnimation
@@ -25,18 +26,12 @@ class Simulation:
         thetastars = [np.linspace(-thetastar, thetastar, simulation_helpers.TSTAR_RANGE)]
         self.thetastar = list(thetastars[random.randint(0, len(thetastars) - 1)])
         self.has_run = False
-        self.natural_frequencies = []
-        while len(self.natural_frequencies) < num_agents:
-            sample = stats.cauchy.rvs(loc=0, scale=360)
-            if -360 < sample < 360:
-                self.natural_frequencies.append(sample)
 
         for i in range(0, self.total_agents):
             self.firefly_array.append(Firefly.Firefly(
                 i, total=self.total_agents, tstar=self.thetastar,
                 tstar_range=simulation_helpers.TSTAR_RANGE,
                 n=self.n, steps=self.steps, r_or_u=self.r_or_u,
-                natural_frequency=self.natural_frequencies[i],
                 use_periodic_boundary_conditions=False)
             )
 
@@ -72,8 +67,8 @@ class Simulation:
                         kuramato_term = math.sin(ff_j.phase[step-1] - ff_i.phase[step-1]) / dist
                         kuramato += kuramato_term
 
-                ff_i.phase[step] = (ff_i.phase[step - 1] + self.coupling_strength * kuramato)
-                ff_i.phase[step] = (ff_i.nat_frequency + ff_i.phase[step]) % math.radians(360)
+                coupling_term = (ff_i.phase[step - 1] + self.coupling_strength * kuramato)
+                ff_i.phase[step] = (ff_i.nat_frequency + coupling_term) % math.radians(360)
                 phase_key = int(math.degrees(ff_i.phase[step]))
                 if phase_key < 0:
                     phase_key += 360

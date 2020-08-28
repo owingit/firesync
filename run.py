@@ -10,8 +10,8 @@ def main():
     thetastars = [math.pi / 8, math.pi / 4, 2 * math.pi]
     side_length = 10
     num_agents = 100
-    step_count = 1000
-    coupling_strength = 0.5
+    step_count = 250
+    coupling_strength = 0.01
     num_trials = 1
 
     for trial in range(0, num_trials):
