@@ -8,17 +8,18 @@ import matplotlib
 from matplotlib.ticker import FixedLocator, FixedFormatter
 from scipy import stats
 import statistics
-
+import obstacle
 import math
 from matplotlib.animation import FuncAnimation
 import collections
 
 
 class Simulation:
-    def __init__(self, num_agents, side_length, step_count, thetastar, coupling_strength, r_or_u="uniform"):
+    def __init__(self, num_agents, side_length, step_count, thetastar, coupling_strength, Tb, r_or_u="uniform"):
         self.total_agents = num_agents
         self.n = side_length
         self.coupling_strength = coupling_strength
+        self.Tb = Tb
         self.steps = step_count
         self.firefly_array = []
         self.r_or_u = r_or_u
@@ -26,17 +27,26 @@ class Simulation:
         thetastars = [np.linspace(-thetastar, thetastar, simulation_helpers.TSTAR_RANGE)]
         self.thetastar = list(thetastars[random.randint(0, len(thetastars) - 1)])
         self.has_run = False
+        self.obstacles = []
+        num_obstacles = random.randint(1, 10)
+        self.init_obstacles(num_obstacles)
 
         for i in range(0, self.total_agents):
             self.firefly_array.append(Firefly.Firefly(
                 i, total=self.total_agents, tstar=self.thetastar,
                 tstar_range=simulation_helpers.TSTAR_RANGE,
                 n=self.n, steps=self.steps, r_or_u=self.r_or_u,
-                use_periodic_boundary_conditions=False)
+                use_periodic_boundary_conditions=False,
+                Tb=self.Tb, obstacles=self.obstacles)
             )
 
         self.num_fireflies_with_phase_x = collections.OrderedDict()
+        self.mean_resultant_vector_length = collections.OrderedDict()
         self.init_stats()
+
+    def init_obstacles(self, num_obstacles):
+        self.obstacles = obstacle.ObstacleGenerator(num_obstacles, self.n)
+        print(self.obstacles.obstacle_array)
 
     def init_stats(self):
         for i in range(self.steps):
@@ -48,33 +58,38 @@ class Simulation:
             self.num_fireflies_with_phase_x[0][phase_in_degrees] += 1
 
     def run(self):
-        num_agents = len(self.firefly_array)
         for step in range(1, self.steps):
             for firefly in self.firefly_array:
-                firefly.move(step)
-            for i in range(0, num_agents):
-                ff_i = self.firefly_array[i]
-                kuramato = 0
-                for j in range(0, num_agents):
-                    if i == j:
-                        continue
-                    else:
-                        ff_j = self.firefly_array[j]
-                        dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
-                                (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
-                        if dist == 0:
-                            continue
-                        kuramato_term = math.sin(ff_j.phase[step-1] - ff_i.phase[step-1]) / dist
-                        kuramato += kuramato_term
-
-                coupling_term = (ff_i.phase[step - 1] + self.coupling_strength * kuramato)
-                ff_i.phase[step] = (ff_i.nat_frequency + coupling_term) % math.radians(360)
-                phase_key = int(math.degrees(ff_i.phase[step]))
-                if phase_key < 0:
-                    phase_key += 360
-                self.num_fireflies_with_phase_x[step][phase_key] += 1
+                firefly.move(step, self.obstacles)
+            self.kuramato_phase_interactions(step)
+            ff_phases = [ff.phase[step] for ff in self.firefly_array]
+            mean_resultant_vector_length = self.circ_r(np.array(ff_phases))
+            self.mean_resultant_vector_length[step] = float(mean_resultant_vector_length)
 
         self.has_run = True
+
+    def kuramato_phase_interactions(self, step):
+        for i in range(0, self.total_agents):
+            ff_i = self.firefly_array[i]
+            kuramato = 0
+            for j in range(0, self.total_agents):
+                if i == j:
+                    continue
+                else:
+                    ff_j = self.firefly_array[j]
+                    dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
+                            (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
+                    if dist == 0:
+                        continue
+                    kuramato_term = math.sin(ff_j.phase[step - 1] - ff_i.phase[step - 1]) / dist
+                    kuramato += kuramato_term
+
+            coupling_term = (ff_i.phase[step - 1] + self.coupling_strength * kuramato)
+            ff_i.phase[step] = (ff_i.nat_frequency + coupling_term) % math.radians(360)
+            phase_key = int(math.degrees(ff_i.phase[step]))
+            if phase_key < 0:
+                phase_key += 360
+            self.num_fireflies_with_phase_x[step][phase_key] += 1
 
     def animate_phase_bins(self, now, write_gif=False, show_gif=False):
         assert self.has_run, "Animation cannot render until the simulation has been run!"
@@ -145,6 +160,8 @@ class Simulation:
 
         ax.set_ylim([0.0, self.n])
         ax.set_ylabel('Y')
+        for obstacle in self.obstacles.obstacle_array:
+            ax.add_artist(plt.Circle((obstacle.centerx, obstacle.centery), obstacle.radius))
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.firefly_array, firefly_paths),
                              interval=100, blit=False)
@@ -188,3 +205,49 @@ class Simulation:
             color_dict[i] = color
 
         return color_dict
+
+    @staticmethod
+    def circ_r(alpha, w=None, d=0, axis=0):
+        """Computes mean resultant vector length for circular data.
+
+        Args:
+            alpha: array
+                Sample of angles in radians
+
+        Kwargs:
+            w: array, optional, [def: None]
+                Number of incidences in case of binned angle data
+
+            d: radians, optional, [def: 0]
+                Spacing of bin centers for binned data, if supplied
+                correction factor is used to correct for bias in
+                estimation of r
+
+            axis: int, optional, [def: 0]
+                Compute along this dimension
+
+        Return:
+            r: mean resultant length
+
+        Code taken from the Circular Statistics Toolbox for Matlab
+        By Philipp Berens, 2009
+        Python adaptation by Etienne Combrisson
+        """
+        if w is None:
+            w = np.ones(alpha.shape)
+        elif alpha.size is not w.size:
+            raise ValueError("Input dimensions do not match")
+
+        # Compute weighted sum of cos and sin of angles:
+        r = np.multiply(w, np.exp(1j * alpha)).sum(axis=axis)
+
+        # Obtain length:
+        r = np.abs(r) / w.sum(axis=axis)
+
+        # For data with known spacing, apply correction factor to
+        # correct for bias in the estimation of r
+        if d is not 0:
+            c = d / 2 / np.sin(d / 2)
+            r = c * r
+
+        return np.array(r)
