@@ -3,8 +3,6 @@ import numpy as np
 import math
 import simulation_helpers
 
-import networkx as nx
-
 
 class Firefly:
     #  Number, total number, theta*, thetastar_range, box dimension, number of steps,
@@ -12,7 +10,7 @@ class Firefly:
     def __init__(self, i, total, tstar, tstar_range,
                  n, steps, r_or_u,
                  use_periodic_boundary_conditions=True,
-                 Tb=1.57, obstacles=None):
+                 tb=1.57, obstacles=None):
         self.velocity = 1.0
         self.side_length_of_enclosure = n
         self.positionx = np.zeros(steps)
@@ -21,15 +19,19 @@ class Firefly:
             r_or_u = "random"
         if r_or_u == "random":
             points_set = False
-            while not points_set:
-                success = True
+            if obstacles:
+                while not points_set:
+                    success = True
+                    self.positionx[0] = random.randint(0, n)
+                    self.positiony[0] = random.randint(0, n)
+                    for obstacle in obstacles.obstacle_array:
+                        if obstacle.contains(self.positionx[0], self.positiony[0]):
+                            success = False
+                    if success:
+                        points_set = True
+            else:
                 self.positionx[0] = random.randint(0, n)
                 self.positiony[0] = random.randint(0, n)
-                for obstacle in obstacles.obstacle_array:
-                    if obstacle.contains(self.positionx[0], self.positiony[0]):
-                        success = False
-                if success:
-                    points_set = True
         else:
             uniform_x_position, uniform_y_position = simulation_helpers.get_uniform_coordinates(i, n, total)
             self.positionx[0] = uniform_x_position
@@ -41,10 +43,10 @@ class Firefly:
         self.trace = {0: (self.positionx[0], self.positiony[0])}
         # natural frequency: 1.57 radians / second
         try:
-            self.nat_frequency = random.vonmisesvariate(Tb, 100)
-            assert 0.80*Tb < self.nat_frequency < 1.20*Tb
+            self.nat_frequency = random.vonmisesvariate(tb, 100)
+            assert 0.80*tb < self.nat_frequency < 1.20*tb
         except AssertionError:
-            self.nat_frequency = Tb
+            self.nat_frequency = tb
 
         self.name = "FF #{}".format(i)
         self.number = i
@@ -87,12 +89,13 @@ class Firefly:
         self.positionx[current_step] = x
         self.positiony[current_step] = y
         self.boundary_conditions(current_step)
-        for obstacle in obstacles.obstacle_array:
-            if obstacle.contains(self.positionx[current_step], self.positiony[current_step]):
-                self.positionx[current_step] = self.positionx[current_step-1]
-                self.positiony[current_step] = self.positiony[current_step-1]
-                self.direction[current_step] = self.direction[current_step-1]
-                self.move(current_step, obstacles, flip_direction=True)
+        if obstacles:
+            for obstacle in obstacles.obstacle_array:
+                if obstacle.contains(self.positionx[current_step], self.positiony[current_step]):
+                    self.positionx[current_step] = self.positionx[current_step-1]
+                    self.positiony[current_step] = self.positiony[current_step-1]
+                    self.direction[current_step] = self.direction[current_step-1]
+                    self.move(current_step, obstacles, flip_direction=True)
         self.velocity = 1.0
         self.trace[current_step] = (self.positionx[current_step], self.positiony[current_step])
 

@@ -10,12 +10,14 @@ from scipy import stats
 import statistics
 import obstacle
 import math
+import bresenham
 from matplotlib.animation import FuncAnimation
 import collections
 
 
 class Simulation:
-    def __init__(self, num_agents, side_length, step_count, thetastar, coupling_strength, Tb, r_or_u="uniform"):
+    def __init__(self, num_agents, side_length, step_count, thetastar, coupling_strength, Tb, r_or_u="uniform",
+                 use_obstacles=False):
         self.total_agents = num_agents
         self.n = side_length
         self.coupling_strength = coupling_strength
@@ -27,9 +29,9 @@ class Simulation:
         thetastars = [np.linspace(-thetastar, thetastar, simulation_helpers.TSTAR_RANGE)]
         self.thetastar = list(thetastars[random.randint(0, len(thetastars) - 1)])
         self.has_run = False
-        self.obstacles = []
-        num_obstacles = random.randint(1, 10)
-        self.init_obstacles(num_obstacles)
+        self.obstacles = None
+        self.use_obstacles = use_obstacles
+        self.init_obstacles()
 
         for i in range(0, self.total_agents):
             self.firefly_array.append(Firefly.Firefly(
@@ -37,16 +39,17 @@ class Simulation:
                 tstar_range=simulation_helpers.TSTAR_RANGE,
                 n=self.n, steps=self.steps, r_or_u=self.r_or_u,
                 use_periodic_boundary_conditions=False,
-                Tb=self.Tb, obstacles=self.obstacles)
+                tb=self.Tb, obstacles=self.obstacles)
             )
 
         self.num_fireflies_with_phase_x = collections.OrderedDict()
         self.mean_resultant_vector_length = collections.OrderedDict()
         self.init_stats()
 
-    def init_obstacles(self, num_obstacles):
-        self.obstacles = obstacle.ObstacleGenerator(num_obstacles, self.n)
-        print(self.obstacles.obstacle_array)
+    def init_obstacles(self):
+        num_obstacles = random.randint(10, 20)
+        if self.use_obstacles is True:
+            self.obstacles = obstacle.ObstacleGenerator(num_obstacles, self.n)
 
     def init_stats(self):
         for i in range(self.steps):
@@ -76,7 +79,19 @@ class Simulation:
                 if i == j:
                     continue
                 else:
+                    skip_dist = False
                     ff_j = self.firefly_array[j]
+                    if self.obstacles:
+                        line = list(bresenham.bresenham(int(ff_i.positionx[step]), int(ff_i.positiony[step]),
+                                                        int(ff_j.positionx[step]), int(ff_j.positiony[step])))
+                        for obstacle in self.obstacles.obstacle_array:
+                            if not skip_dist:
+                                for xy in line:
+                                    if obstacle.contains(xy[0], xy[1]):
+                                        skip_dist = True
+                                        break
+                        if skip_dist is True:
+                            continue
                     dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
                             (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
                     if dist == 0:
@@ -160,8 +175,9 @@ class Simulation:
 
         ax.set_ylim([0.0, self.n])
         ax.set_ylabel('Y')
-        for obstacle in self.obstacles.obstacle_array:
-            ax.add_artist(plt.Circle((obstacle.centerx, obstacle.centery), obstacle.radius))
+        if self.obstacles:
+            for obstacle in self.obstacles.obstacle_array:
+                ax.add_artist(plt.Circle((obstacle.centerx, obstacle.centery), obstacle.radius))
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.firefly_array, firefly_paths),
                              interval=100, blit=False)

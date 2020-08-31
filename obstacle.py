@@ -19,13 +19,13 @@ class ObstacleGenerator:
         obstacles = []
         for i in range(self.num_obstacles):
             centerx, centery = self.get_random_point()
-            radius = random.randint(0, ((arena_side_length ** 1/2) / 2))
+            radius = random.random() * (self.arena_side_length ** 0.5) / 4
             obstacle = Obstacle(centerx, centery, radius)
             obstacles.append(obstacle)
 
         self.obstacle_array = obstacles
 
     def get_random_point(self):
-        x = random.randint(0, self.arena_side_length)
-        y = random.randint(0, self.arena_side_length)
+        x = random.randint(2, self.arena_side_length - 2)
+        y = random.randint(2, self.arena_side_length - 2)
         return x, y
