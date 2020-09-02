@@ -19,7 +19,7 @@ class ObstacleGenerator:
         obstacles = []
         for i in range(self.num_obstacles):
             centerx, centery = self.get_random_point()
-            radius = random.random() * (self.arena_side_length ** 0.5) / 4
+            radius = random.random() * (self.arena_side_length ** 0.5) / 2
             obstacle = Obstacle(centerx, centery, radius)
             obstacles.append(obstacle)
 

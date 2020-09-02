@@ -45,6 +45,7 @@ class Simulation:
         self.num_fireflies_with_phase_x = collections.OrderedDict()
         self.mean_resultant_vector_length = collections.OrderedDict()
         self.init_stats()
+        self.boilerplate = '({}density, {}rad natural frequency)'.format(self.total_agents / (self.n*self.n), self.Tb)
 
     def init_obstacles(self):
         num_obstacles = random.randint(10, 20)
@@ -92,6 +93,7 @@ class Simulation:
                                         break
                         if skip_dist is True:
                             continue
+
                     dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
                             (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
                     if dist == 0:
@@ -127,19 +129,38 @@ class Simulation:
         def animate(i, data):
             for rect, n in zip(rects, data[i].keys()):
                 rect.set_height(data[i][n])
-            ax.set_title('Num agents with particular phase at step {}'.format(i))
+            ax.set_title('Num agents with particular phase at step {}'.format(i) + self.boilerplate)
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=[self.num_fireflies_with_phase_x],
                              interval=25, blit=False, repeat=False)
-        if write_gif:
-            anim.save('data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
+        save_string = 'data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
                 self.total_agents,
                 self.n, self.n,
                 self.coupling_strength,
                 self.steps,
                 self.r_or_u,
                 now
-            ))
+            )
+        if self.use_obstacles:
+            save_string = 'data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_obstacles.gif'.format(
+                self.total_agents,
+                self.n, self.n,
+                self.coupling_strength,
+                self.steps,
+                self.r_or_u,
+                now
+            )
+        else:
+            save_string = 'data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}.gif'.format(
+                self.total_agents,
+                self.n, self.n,
+                self.coupling_strength,
+                self.steps,
+                self.r_or_u,
+                now
+            )
+        if write_gif:
+            anim.save(save_string)
         if show_gif:
             plt.show()
 
@@ -167,7 +188,7 @@ class Simulation:
                 line.set_color(color_dict[int(deg)])
                 xdatas[fly.number].pop(0)
                 ydatas[fly.number].pop(0)
-            ax.set_title('2D Walk Phase Interactions (step {})'.format(i))
+            ax.set_title('2D Walk Phase Interactions (step {})'.format(i) + self.boilerplate)
             return lines
 
         ax.set_xlim([0.0, self.n])
@@ -181,16 +202,26 @@ class Simulation:
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.firefly_array, firefly_paths),
                              interval=100, blit=False)
-
-        if write_gif:
-            anim.save('data/phaseanim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
+        if self.use_obstacles:
+            save_string = 'data/phaseanim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_obstacles.gif'.format(
                 self.total_agents,
                 self.n, self.n,
                 self.coupling_strength,
                 self.steps,
                 self.r_or_u,
                 now
-            ))
+            )
+        else:
+            save_string = 'data/phaseanim_{}agents_{}x{}_k={}_steps={}_{}distribution{}.gif'.format(
+                self.total_agents,
+                self.n, self.n,
+                self.coupling_strength,
+                self.steps,
+                self.r_or_u,
+                now
+            )
+        if write_gif:
+            anim.save(save_string)
         if show_gif:
             plt.show()
 
