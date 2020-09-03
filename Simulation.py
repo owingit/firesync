@@ -10,7 +10,6 @@ from scipy import stats
 import statistics
 import obstacle
 import math
-import bresenham
 from matplotlib.animation import FuncAnimation
 import collections
 
@@ -18,21 +17,27 @@ import collections
 class Simulation:
     def __init__(self, num_agents, side_length, step_count, thetastar, coupling_strength, Tb, r_or_u="uniform",
                  use_obstacles=False):
+        self.firefly_array = []
+
+        # constants set by run.py
         self.total_agents = num_agents
         self.n = side_length
         self.coupling_strength = coupling_strength
         self.Tb = Tb
         self.steps = step_count
-        self.firefly_array = []
         self.r_or_u = r_or_u
         self.tstar_seed = thetastar
         thetastars = [np.linspace(-thetastar, thetastar, simulation_helpers.TSTAR_RANGE)]
         self.thetastar = list(thetastars[random.randint(0, len(thetastars) - 1)])
-        self.has_run = False
-        self.obstacles = None
         self.use_obstacles = use_obstacles
-        self.init_obstacles()
+        self.boilerplate = '({}density, {}rad natural frequency)'.format(self.total_agents / (self.n*self.n), self.Tb)
 
+        self.has_run = False
+        self.obstacles = False
+        if self.use_obstacles is True:
+            self.init_obstacles()
+
+        # initialize all Firefly agents
         for i in range(0, self.total_agents):
             self.firefly_array.append(Firefly.Firefly(
                 i, total=self.total_agents, tstar=self.thetastar,
@@ -42,17 +47,18 @@ class Simulation:
                 tb=self.Tb, obstacles=self.obstacles)
             )
 
+        # statistics reporting
         self.num_fireflies_with_phase_x = collections.OrderedDict()
         self.mean_resultant_vector_length = collections.OrderedDict()
         self.init_stats()
-        self.boilerplate = '({}density, {}rad natural frequency)'.format(self.total_agents / (self.n*self.n), self.Tb)
 
     def init_obstacles(self):
+        """Initialize an array of obstacles randomly placed throughout the arena."""
         num_obstacles = random.randint(10, 20)
-        if self.use_obstacles is True:
-            self.obstacles = obstacle.ObstacleGenerator(num_obstacles, self.n)
+        self.obstacles = obstacle.ObstacleGenerator(num_obstacles, self.n)
 
     def init_stats(self):
+        """Initialize per-timestep dictionaries tracking firefly phase and TODO: more things."""
         for i in range(self.steps):
             self.num_fireflies_with_phase_x[i] = {key: 0 for key in range(0, 360)}
         for firefly in self.firefly_array:
@@ -62,6 +68,11 @@ class Simulation:
             self.num_fireflies_with_phase_x[0][phase_in_degrees] += 1
 
     def run(self):
+        """
+        Run the simulation. At each timestep, a firefly moves in relation to obstacles present and
+        experiences phase interactions, either by slightly modified Kuramato model interactions or
+        TODO: integrate and fire reactions.
+        """
         for step in range(1, self.steps):
             for firefly in self.firefly_array:
                 firefly.move(step, self.obstacles)
@@ -73,6 +84,7 @@ class Simulation:
         self.has_run = True
 
     def kuramato_phase_interactions(self, step):
+        """Each firefly's phase wave interacts with the phase wave of its detectable neighbors by the Kuramato model."""
         for i in range(0, self.total_agents):
             ff_i = self.firefly_array[i]
             kuramato = 0
@@ -83,8 +95,9 @@ class Simulation:
                     skip_dist = False
                     ff_j = self.firefly_array[j]
                     if self.obstacles:
-                        line = list(bresenham.bresenham(int(ff_i.positionx[step]), int(ff_i.positiony[step]),
-                                                        int(ff_j.positionx[step]), int(ff_j.positiony[step])))
+                        line = simulation_helpers.generate_line_points((ff_i.positionx[step], ff_i.positiony[step]),
+                                                                       (ff_j.positionx[step], ff_j.positiony[step]),
+                                                                       num_points=100)
                         for obstacle in self.obstacles.obstacle_array:
                             if not skip_dist:
                                 for xy in line:
@@ -109,6 +122,7 @@ class Simulation:
             self.num_fireflies_with_phase_x[step][phase_key] += 1
 
     def animate_phase_bins(self, now, write_gif=False, show_gif=False):
+        """Animate the # of ff's in each phase (0 -> 2*pi) over time."""
         assert self.has_run, "Animation cannot render until the simulation has been run!"
         plt.style.use('seaborn-pastel')
         num_bins = 360
@@ -165,6 +179,7 @@ class Simulation:
             plt.show()
 
     def animate_walk(self, now, write_gif=False, show_gif=False):
+        """Animate the 2d correlated random walks of all fireflies, colored by phase."""
         assert self.has_run, "Animation cannot render until the simulation has been run!"
         plt.style.use('seaborn-pastel')
         fig = plt.figure()
@@ -227,6 +242,7 @@ class Simulation:
 
     @staticmethod
     def setup_color_legend(axis):
+        """Set the embedded color axis for the 2d correlated random walk that shows color-phase relations."""
         steps = 360
         color_dict = {}
         hsv = matplotlib.cm.get_cmap('hsv', steps)

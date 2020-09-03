@@ -44,6 +44,18 @@ def set_constants():
 
 
 def setup_simulations(params):
+    """
+    Instantiate t*n*cs*tb*trial simulation objects with their parameters, where
+
+    t=number of different thetastar ranges,
+    n=number of different agent counts,
+    cs=number of different coupling strengths,
+    tb=number of different internal frequencies,
+    trial=number of trials. All these values are held in the params dict.
+    Right now, side length and step count are held as constants, but the params dict could easily pass those as lists
+    and add to the combinatorics by iterating through each of those as well.
+
+    """
     simulations = []
     for thetastar in params[TSTARS]:
         for num_agents in params[NUM_AGENTS]:
@@ -51,9 +63,9 @@ def setup_simulations(params):
                 for Tb in params[TBS]:
                     for trial in range(0, params[TRIALS]):
                         if trial == 0:
-                            use_obstacles = False
-                        else:
                             use_obstacles = True
+                        else:
+                            use_obstacles = False
                         n = params[NS]
                         step_count = params[STEPS]
                         simulation = Simulation.Simulation(num_agents=num_agents,
@@ -69,6 +81,10 @@ def setup_simulations(params):
 
 
 def run_simulations(simulations):
+    """
+    Run all simulations set up by setup_simulations.
+    The results are stored in a dictionary keyed by their parameters.
+    """
     experiment_results = {}
     for count, simulation in enumerate(simulations):
         simulation.run()
@@ -84,6 +100,7 @@ def run_simulations(simulations):
 
 
 def plot_animations(experiment_results):
+    """Call a simulation's animation functionality."""
     now = datetime.now()
     for identifier, simulation_list in experiment_results.items():
         for simulation in simulation_list:
@@ -92,6 +109,7 @@ def plot_animations(experiment_results):
 
 
 def plot_mean_vector_length_results(params, experiment_results):
+    """Directly plot statistical results from a simulation."""
     ax = plt.axes(xlim=(0, params[STEPS] + 1), ylim=(0, 1.05))
     ax.set_xlabel('Step')
     ax.set_ylabel('Mean resultant vector length')
@@ -117,7 +135,6 @@ def plot_mean_vector_length_results(params, experiment_results):
         ax.plot(_to_plot_obstacles.keys(), _to_plot_obstacles.values(), label='obstacles')
         ax.legend()
     plt.show()
-    print(experiment_results)
 
 
 if __name__ == "__main__":

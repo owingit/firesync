@@ -11,6 +11,12 @@ class Firefly:
                  n, steps, r_or_u,
                  use_periodic_boundary_conditions=True,
                  tb=1.57, obstacles=None):
+        self.name = "FF #{}".format(i)
+        self.number = i
+        if use_periodic_boundary_conditions:
+            self.boundary_conditions = self.periodic_boundary_conditions
+        else:
+            self.boundary_conditions = self.non_periodic_boundary_conditions
         self.velocity = 1.0
         self.side_length_of_enclosure = n
         self.positionx = np.zeros(steps)
@@ -40,25 +46,21 @@ class Firefly:
         self.direction[0] = simulation_helpers.get_initial_direction(tstar_range)
         self.direction_set = False
         self.theta_star = tstar
+
+        self.phase = np.zeros(steps)
+        self.phase[0] = random.random() * math.pi * 2
+
+        # the total path of a firefly through 2d space
         self.trace = {0: (self.positionx[0], self.positiony[0])}
-        # natural frequency: 1.57 radians / second
+
         try:
             self.nat_frequency = random.vonmisesvariate(tb, 100)
             assert 0.80*tb < self.nat_frequency < 1.20*tb
         except AssertionError:
             self.nat_frequency = tb
 
-        self.name = "FF #{}".format(i)
-        self.number = i
-        if use_periodic_boundary_conditions:
-            self.boundary_conditions = self.periodic_boundary_conditions
-        else:
-            self.boundary_conditions = self.non_periodic_boundary_conditions
-
-        self.phase = np.zeros(steps)
-        self.phase[0] = random.random() * math.pi * 2
-
     def move(self, current_step, obstacles, flip_direction=False):
+        """Move a firefly through 2d space using a correlated 2d random walk."""
         random_int = random.randint(0, 99)
         step_theta = self.theta_star[random_int]
         decrease_velocity = False
@@ -77,6 +79,7 @@ class Firefly:
         self.attempt_step(current_step, direction, obstacles, decrease_velocity=decrease_velocity)
 
     def attempt_step(self, current_step, direction, obstacles, decrease_velocity=False):
+        """Stage a step for completion."""
         if decrease_velocity:
             self.velocity /= 2
         potential_x_position = self.positionx[current_step - 1] + self.velocity * math.cos(direction)
@@ -86,6 +89,7 @@ class Firefly:
         self.complete_step(current_step, potential_x_position, potential_y_position, obstacles)
 
     def complete_step(self, current_step, x, y, obstacles):
+        """Complete a step if it does not interfere with an obstacle; recall move otherwise."""
         self.positionx[current_step] = x
         self.positiony[current_step] = y
         self.boundary_conditions(current_step)
@@ -100,6 +104,7 @@ class Firefly:
         self.trace[current_step] = (self.positionx[current_step], self.positiony[current_step])
 
     def periodic_boundary_conditions(self, current_step):
+        """Going off the edge of the arena returns an agent to the other side."""
         if self.positionx[current_step] > self.side_length_of_enclosure:
             self.positionx[current_step] = self.positionx[current_step] - self.side_length_of_enclosure
         if self.positionx[current_step] < 0:
@@ -111,6 +116,7 @@ class Firefly:
             self.positiony[current_step] += self.side_length_of_enclosure
 
     def non_periodic_boundary_conditions(self, current_step):
+        """Bounce off the edges of the arena."""
         flip_direction = False
         if self.positionx[current_step] > self.side_length_of_enclosure:
             distance_from_edge = abs(self.positionx[current_step] - self.side_length_of_enclosure)
