@@ -50,6 +50,23 @@ class Firefly:
         self.phase = np.zeros(steps)
         self.phase[0] = random.random() * math.pi * 2
 
+        # integrate and fire params
+        self.beta = 0.1
+        self.charging_time = 5
+        self.discharging_time = 5
+        self.is_charging = random.choice([0, 1])  # or 0
+        self.voltage_threshold = 1
+        self.voltage_instantaneous = np.zeros(steps)
+        self.voltage_instantaneous[0] = random.random()
+        self.phrase_duration = 100 #ms
+        self.flashes_per_burst = random.randint(5, 8)
+        self.flashes_left_in_current_burst = self.flashes_per_burst
+        self.quiet_period = self.phrase_duration - (
+                (self.charging_time + self.discharging_time) * self.flashes_per_burst
+        )
+        self.flash_steps = []
+        self.bursts = []
+
         # the total path of a firefly through 2d space
         self.trace = {0: (self.positionx[0], self.positiony[0])}
 
@@ -138,3 +155,12 @@ class Firefly:
 
         if flip_direction:
             self.direction[current_step] = -self.direction[current_step]
+
+    def flash(self, step):
+        self.flashes_left_in_current_burst -= 1
+        if self.flashes_left_in_current_burst == 0:
+            self.flashes_left_in_current_burst = self.flashes_per_burst
+            steps_with_flash = list(range(step - self.flashes_per_burst, step))
+            self.bursts = steps_with_flash
+            self.flash_steps.append(steps_with_flash)
+            print(self.name, steps_with_flash)

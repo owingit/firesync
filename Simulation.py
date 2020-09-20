@@ -23,6 +23,7 @@ class Simulation:
         self.total_agents = num_agents
         self.n = side_length
         self.coupling_strength = coupling_strength
+        self.alpha = 2
         self.Tb = Tb
         self.steps = step_count
         self.r_or_u = r_or_u
@@ -37,19 +38,23 @@ class Simulation:
         if self.use_obstacles is True:
             self.init_obstacles()
 
+        self.use_kuramato = False
+        self.use_integrate_and_fire = not self.use_kuramato
+
         # initialize all Firefly agents
         for i in range(0, self.total_agents):
             self.firefly_array.append(Firefly.Firefly(
                 i, total=self.total_agents, tstar=self.thetastar,
                 tstar_range=simulation_helpers.TSTAR_RANGE,
                 n=self.n, steps=self.steps, r_or_u=self.r_or_u,
-                use_periodic_boundary_conditions=False,
+                use_periodic_boundary_conditions=True,
                 tb=self.Tb, obstacles=self.obstacles)
             )
 
         # statistics reporting
         self.num_fireflies_with_phase_x = collections.OrderedDict()
         self.mean_resultant_vector_length = collections.OrderedDict()
+        self.wave_statistics = collections.OrderedDict()
         self.init_stats()
 
     def init_obstacles(self):
@@ -61,11 +66,25 @@ class Simulation:
         """Initialize per-timestep dictionaries tracking firefly phase and TODO: more things."""
         for i in range(self.steps):
             self.num_fireflies_with_phase_x[i] = {key: 0 for key in range(0, 360)}
+            self.wave_statistics[i] = {}
+
+        phase_zero_fireflies = []
         for firefly in self.firefly_array:
             phase_in_degrees = int(math.degrees(firefly.phase[0]))
             if phase_in_degrees < 0:
                 phase_in_degrees += 360
+            if 0 <= phase_in_degrees < 1 or 359 < phase_in_degrees <= 360:
+                phase_zero_fireflies.append(firefly)
             self.num_fireflies_with_phase_x[0][phase_in_degrees] += 1
+
+        if phase_zero_fireflies:
+            phase_zero_fit = np.polyfit([ff.positionx[0] for ff in phase_zero_fireflies],
+                                        [ff.positiony[0] for ff in phase_zero_fireflies],
+                                        1)
+        else:
+            phase_zero_fit = [0, 0]
+        self.wave_statistics[0]['count'] = len(phase_zero_fireflies)
+        self.wave_statistics[0]['regression'] = phase_zero_fit
 
     def run(self):
         """
@@ -74,14 +93,87 @@ class Simulation:
         TODO: integrate and fire reactions.
         """
         for step in range(1, self.steps):
+            print(step)
             for firefly in self.firefly_array:
                 firefly.move(step, self.obstacles)
-            self.kuramato_phase_interactions(step)
+            if self.use_kuramato:
+                self.kuramato_phase_interactions(step)
+            if self.use_integrate_and_fire:
+                self.integrate_and_fire_interactions(step)
+            phase_zero_fireflies = [ff
+                                    for ff in self.firefly_array
+                                    if 0 <= ff.phase[step] < 1 or 359 < ff.phase[step] <= 360
+                                    # or ((ff.phase[step-1] + ff.phase[step] - 2 * (360 - ff.phase[step-1])) % 360 <= math.degrees(self.Tb))
+                                    ]
+            if phase_zero_fireflies:
+                phase_zero_fit = np.polyfit(
+                    [ff.positionx[step] for ff in phase_zero_fireflies],
+                    [ff.positiony[step] for ff in phase_zero_fireflies],
+                    1)
+            else:
+                phase_zero_fit = self.wave_statistics[step-1]['regression']
+            self.wave_statistics[step]['count'] = len(phase_zero_fireflies)
+            self.wave_statistics[step]['regression'] = phase_zero_fit
             ff_phases = [ff.phase[step] for ff in self.firefly_array]
             mean_resultant_vector_length = self.circ_r(np.array(ff_phases))
             self.mean_resultant_vector_length[step] = float(mean_resultant_vector_length)
 
         self.has_run = True
+
+    def integrate_and_fire_interactions(self, step):
+        for i in range(0, self.total_agents):
+            ff_i = self.firefly_array[i]
+
+            # discharging
+            if ff_i.voltage_instantaneous[step-1] >= (2 * ff_i.voltage_threshold / 3):
+                if len(ff_i.flash_steps) == 0:
+                    ff_i.flash(step)
+                elif step - ff_i.flash_steps[len(ff_i.flash_steps) - 1] > ff_i.quiet_period:
+                    ff_i.flash(step)
+                    ff_i.is_charging = 0
+
+            # charging
+            elif ff_i.voltage_instantaneous[step-1] <= ff_i.voltage_threshold / 3:
+                if not ff_i.is_charging:
+                    ff_i.is_charging = 1
+
+        for i in range(0, self.total_agents):
+            ff_i = self.firefly_array[i]
+            if ff_i.is_charging:
+                dvt = (math.log(2)/ff_i.charging_time) * (ff_i.voltage_threshold - ff_i.voltage_instantaneous[step-1])
+            else:
+                dvt = -(math.log(2)/ff_i.discharging_time) * ff_i.voltage_instantaneous[step-1]
+
+            int_term = 0
+            env_signal = 0
+            for j in range(0, self.total_agents):
+                if i == j:
+                    continue
+                else:
+                    skip_dist = False
+                    ff_j = self.firefly_array[j]
+                    if self.obstacles:
+                        if not skip_dist:
+
+                            line = simulation_helpers.generate_line_points((ff_i.positionx[step], ff_i.positiony[step]),
+                                                                           (ff_j.positionx[step], ff_j.positiony[step]),
+                                                                           num_points=100)
+                            for obstacle in self.obstacles.obstacle_array:
+                                if not skip_dist:
+                                    for xy in line:
+                                        if obstacle.contains(xy[0], xy[1]):
+                                            skip_dist = True
+                                            break
+                        if skip_dist:
+                            continue
+
+                    int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
+                    env_signal = env_signal + (1 - ff_j.is_charging)
+
+                    # this is what one firefly contributes to the charging / discharging
+            ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + dvt + int_term
+            if step in ff_i.flash_steps:
+                ff_i.voltage_instantaneous[step] = 0
 
     def kuramato_phase_interactions(self, step):
         """Each firefly's phase wave interacts with the phase wave of its detectable neighbors by the Kuramato model."""
@@ -95,16 +187,18 @@ class Simulation:
                     skip_dist = False
                     ff_j = self.firefly_array[j]
                     if self.obstacles:
-                        line = simulation_helpers.generate_line_points((ff_i.positionx[step], ff_i.positiony[step]),
-                                                                       (ff_j.positionx[step], ff_j.positiony[step]),
-                                                                       num_points=100)
-                        for obstacle in self.obstacles.obstacle_array:
-                            if not skip_dist:
-                                for xy in line:
-                                    if obstacle.contains(xy[0], xy[1]):
-                                        skip_dist = True
-                                        break
-                        if skip_dist is True:
+                        if not skip_dist:
+
+                            line = simulation_helpers.generate_line_points((ff_i.positionx[step], ff_i.positiony[step]),
+                                                                           (ff_j.positionx[step], ff_j.positiony[step]),
+                                                                           num_points=100)
+                            for obstacle in self.obstacles.obstacle_array:
+                                if not skip_dist:
+                                    for xy in line:
+                                        if obstacle.contains(xy[0], xy[1]):
+                                            skip_dist = True
+                                            break
+                        if skip_dist:
                             continue
 
                     dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
@@ -190,9 +284,9 @@ class Simulation:
         ydatas = {n: [] for n in range(0, self.total_agents)}
 
         firefly_paths = [ax.plot([], [], '*')[0] for _ in self.firefly_array]
+        regression_line = ax.plot([], [], color=color_dict[0], linewidth=2)[0]
 
-        # TODO: set color by phase
-        def animate(i, flies, lines):
+        def animate(i, flies, lines, wavestats, wave):
             for line, fly in zip(lines, flies):
                 xdatas[fly.number].append(fly.trace.get(i)[0])
                 ydatas[fly.number].append(fly.trace.get(i)[1])
@@ -203,8 +297,14 @@ class Simulation:
                 line.set_color(color_dict[int(deg)])
                 xdatas[fly.number].pop(0)
                 ydatas[fly.number].pop(0)
+            all_xs = [fly.positionx for fly in flies if 0 <= fly.phase[i] < 1
+                      or 359 < fly.phase[i] <= 360
+                      # or ((fly.phase[i - 1] + fly.phase[i] - 2 * (360 - fly.phase[i - 1])) % 360 <= math.degrees(1.57))
+                      ]
+            wave.set_xdata(all_xs)
+            wave.set_ydata(wavestats[i]['regression'][0] * np.asarray(all_xs) + wavestats[i]['regression'][1])
             ax.set_title('2D Walk Phase Interactions (step {})'.format(i) + self.boilerplate)
-            return lines
+            return lines, wave
 
         ax.set_xlim([0.0, self.n])
         ax.set_xlabel('X')
@@ -215,7 +315,8 @@ class Simulation:
             for obstacle in self.obstacles.obstacle_array:
                 ax.add_artist(plt.Circle((obstacle.centerx, obstacle.centery), obstacle.radius))
 
-        anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.firefly_array, firefly_paths),
+        anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.firefly_array, firefly_paths,
+                                                                     self.wave_statistics, regression_line),
                              interval=100, blit=False)
         if self.use_obstacles:
             save_string = 'data/phaseanim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_obstacles.gif'.format(

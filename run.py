@@ -29,8 +29,8 @@ def set_constants():
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
     side_length = 16
-    num_agent_options = [160]  # , 500, 1000]
-    step_count = 100
+    num_agent_options = [25]  # , 500, 1000]
+    step_count = 10000
     coupling_strengths = [0.03]  # , 0.2, 0.5]
     num_trials = 1
     params[TSTARS] = thetastars
@@ -62,7 +62,7 @@ def setup_simulations(params):
             for coupling_strength in params[KS]:
                 for Tb in params[TBS]:
                     for trial in range(0, params[TRIALS]):
-                        if trial == 0:
+                        if trial % 2 == 0:
                             use_obstacles = True
                         else:
                             use_obstacles = False
@@ -104,8 +104,8 @@ def plot_animations(experiment_results):
     now = datetime.now()
     for identifier, simulation_list in experiment_results.items():
         for simulation in simulation_list:
-            simulation.animate_phase_bins(now, show_gif=True, write_gif=False)
-            simulation.animate_walk(now, show_gif=True, write_gif=False)
+            # simulation.animate_phase_bins(now, show_gif=False, write_gif=False)
+            simulation.animate_walk(now, show_gif=True, write_gif=True)
 
 
 def plot_mean_vector_length_results(params, experiment_results):
@@ -116,11 +116,11 @@ def plot_mean_vector_length_results(params, experiment_results):
     for identifier, simulations in experiment_results.items():
         _to_plot_obstacles = {key: 0 for key in simulations[0].mean_resultant_vector_length.keys()}
         _to_plot_no_obstacles = {key: 0 for key in simulations[0].mean_resultant_vector_length.keys()}
-        for i, instance in enumerate(simulations):
-            if i % 2 == 0:
-                label = 'no_obstacles'
-            else:
+        for instance in simulations:
+            if instance.use_obstacles:
                 label = 'obstacles'
+            else:
+                label = 'no_obstacles'
             for k, v in instance.mean_resultant_vector_length.items():
                 if label == 'obstacles':
                     _to_plot_obstacles[k] += v
