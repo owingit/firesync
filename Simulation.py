@@ -115,20 +115,27 @@ class Simulation:
             self.wave_statistics[step]['count'] = len(phase_zero_fireflies)
             self.wave_statistics[step]['regression'] = phase_zero_fit
             ff_phases = [ff.phase[step] for ff in self.firefly_array]
-            mean_resultant_vector_length = self.circ_r(np.array(ff_phases))
+            if self.use_kuramato:
+                mean_resultant_vector_length = self.circ_r(np.array(ff_phases))
+            else:
+                # ToDO: better metric
+                mean_resultant_vector_length = self.circ_r(np.array(
+                    [ff.voltage_instantaneous[step] * 2*math.pi for ff in self.firefly_array]))
             self.mean_resultant_vector_length[step] = float(mean_resultant_vector_length)
 
         self.has_run = True
 
     def integrate_and_fire_interactions(self, step):
+        print(self.firefly_array[0].voltage_instantaneous[step])
         for i in range(0, self.total_agents):
             ff_i = self.firefly_array[i]
 
             # discharging
             if ff_i.voltage_instantaneous[step-1] >= (2 * ff_i.voltage_threshold / 3):
-                if len(ff_i.flash_steps) == 0:
+                if len(ff_i.flash_steps) == 0 and ff_i.nat_frequency < 3.14:
                     ff_i.flash(step)
-                elif step - ff_i.flash_steps[len(ff_i.flash_steps) - 1] > ff_i.quiet_period:
+                    ff_i.is_charging = 0
+                elif ff_i.flash_steps and step - ff_i.flash_steps[-1][-1] > ff_i.quiet_period:
                     ff_i.flash(step)
                     ff_i.is_charging = 0
 
@@ -172,8 +179,11 @@ class Simulation:
 
                     # this is what one firefly contributes to the charging / discharging
             ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + dvt + int_term
-            if step in ff_i.flash_steps:
+            if ff_i.switched:
+                ff_i.switched = False
                 ff_i.voltage_instantaneous[step] = 0
+
+        print(self.firefly_array[0].voltage_instantaneous[step])
 
     def kuramato_phase_interactions(self, step):
         """Each firefly's phase wave interacts with the phase wave of its detectable neighbors by the Kuramato model."""
@@ -341,6 +351,44 @@ class Simulation:
         if show_gif:
             plt.show()
 
+    def plot_bursts(self, now, write_gif=False, show_gif=False):
+        """Plot the flash bursts over time"""
+        assert self.has_run, "Plot cannot render until the simulation has been run!"
+        plt.style.use('seaborn-pastel')
+        ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
+        bursts_at_each_timestep = self.get_burst_data()
+        ax.plot(bursts_at_each_timestep.keys(), bursts_at_each_timestep.values())
+
+        ax.set_xlim([0.0, self.steps])
+        ax.set_xlabel('Step')
+
+        ax.set_ylim([0.0, self.total_agents])
+        ax.set_ylabel('Number of flashers at timestep')
+        plt.title('Flashes over time')
+
+        if self.use_obstacles:
+            save_string = 'data/flashplot_{}agents_{}x{}_k={}_steps={}_{}distribution{}_obstacles.png'.format(
+                self.total_agents,
+                self.n, self.n,
+                self.coupling_strength,
+                self.steps,
+                self.r_or_u,
+                now
+            )
+        else:
+            save_string = 'data/flashplot_{}agents_{}x{}_k={}_steps={}_{}distribution{}.png'.format(
+                self.total_agents,
+                self.n, self.n,
+                self.coupling_strength,
+                self.steps,
+                self.r_or_u,
+                now
+            )
+        if write_gif:
+            plt.savefig(save_string)
+        if show_gif:
+            plt.show()
+
     @staticmethod
     def setup_color_legend(axis):
         """Set the embedded color axis for the 2d correlated random walk that shows color-phase relations."""
@@ -415,3 +463,12 @@ class Simulation:
             r = c * r
 
         return np.array(r)
+
+    def get_burst_data(self):
+        to_plot = {i: 0 for i in range(self.steps)}
+        for step in range(self.steps):
+            for firefly in self.firefly_array:
+                flat_list_of_steps = [item for sublist in firefly.flash_steps for item in sublist]
+                if step in flat_list_of_steps:
+                    to_plot[step] += 1
+        return to_plot
