@@ -45,28 +45,28 @@ class Firefly:
         self.direction = np.zeros(steps)
         self.direction[0] = simulation_helpers.get_initial_direction(tstar_range)
         self.direction_set = False
+        self.ready = False
         self.theta_star = tstar
 
         self.phase = np.zeros(steps)
         self.phase[0] = random.random() * math.pi * 2
 
         # integrate and fire params
-        self.beta = 0.1
+        self.beta = 0.415
         self.charging_time = 5
         self.discharging_time = 5
-        self.is_charging = random.choice([0, 1])  # or 0
+        self.is_charging = np.ones(steps)
         self.voltage_threshold = 1
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
-        self.phrase_duration = 100  # ms
+        self.phrase_duration = 200  # ms
         self.flashes_per_burst = random.randint(5, 8)
         self.flashes_left_in_current_burst = self.flashes_per_burst
-        self.switched = False
         self.quiet_period = self.phrase_duration - (
                 (self.charging_time + self.discharging_time) * self.flashes_per_burst
         )
-        self.flash_steps = []
-        self.bursts = []
+        self.flashed_at_this_step = [False] * steps
+        self.ends_of_bursts = []
 
         # the total path of a firefly through 2d space
         self.trace = {0: (self.positionx[0], self.positiony[0])}
@@ -76,6 +76,12 @@ class Firefly:
             assert 0.80*tb < self.nat_frequency < 1.20*tb
         except AssertionError:
             self.nat_frequency = tb
+
+    def set_ready(self):
+        self.ready = True
+
+    def unset_ready(self):
+        self.ready = False
 
     def move(self, current_step, obstacles, flip_direction=False):
         """Move a firefly through 2d space using a correlated 2d random walk."""
@@ -157,12 +163,10 @@ class Firefly:
         if flip_direction:
             self.direction[current_step] = -self.direction[current_step]
 
-    def flash(self, step):
+    def flash(self, t):
+        self.flashed_at_this_step[t] = True
         self.flashes_left_in_current_burst -= 1
         if self.flashes_left_in_current_burst == 0:
-            self.switched = True
+            self.unset_ready()
             self.flashes_left_in_current_burst = self.flashes_per_burst
-            steps_with_flash = list(range(step - self.flashes_per_burst, step))
-            self.bursts = steps_with_flash
-            self.flash_steps.append(steps_with_flash)
-            print(self.name, steps_with_flash)
+            self.ends_of_bursts.append(t)

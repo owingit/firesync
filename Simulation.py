@@ -18,6 +18,8 @@ class Simulation:
     def __init__(self, num_agents, side_length, step_count, thetastar, coupling_strength, Tb, r_or_u="uniform",
                  use_obstacles=False):
         self.firefly_array = []
+        self.use_kuramato = False
+        self.use_integrate_and_fire = not self.use_kuramato
 
         # constants set by run.py
         self.total_agents = num_agents
@@ -31,15 +33,11 @@ class Simulation:
         thetastars = [np.linspace(-thetastar, thetastar, simulation_helpers.TSTAR_RANGE)]
         self.thetastar = list(thetastars[random.randint(0, len(thetastars) - 1)])
         self.use_obstacles = use_obstacles
-        self.boilerplate = '({}density, {}rad natural frequency)'.format(self.total_agents / (self.n*self.n), self.Tb)
 
         self.has_run = False
         self.obstacles = False
         if self.use_obstacles is True:
             self.init_obstacles()
-
-        self.use_kuramato = False
-        self.use_integrate_and_fire = not self.use_kuramato
 
         # initialize all Firefly agents
         for i in range(0, self.total_agents):
@@ -50,6 +48,12 @@ class Simulation:
                 use_periodic_boundary_conditions=True,
                 tb=self.Tb, obstacles=self.obstacles)
             )
+        if self.use_kuramato:
+            self.boilerplate = '({}density, {}rad natural frequency)'.format(self.total_agents / (self.n * self.n),
+                                                                             self.Tb)
+        else:
+            self.boilerplate = '{}density, {}beta'.format(self.total_agents / (self.n * self.n),
+                                                          self.firefly_array[0].beta)
 
         # statistics reporting
         self.num_fireflies_with_phase_x = collections.OrderedDict()
@@ -126,27 +130,33 @@ class Simulation:
         self.has_run = True
 
     def integrate_and_fire_interactions(self, step):
-        print(self.firefly_array[0].voltage_instantaneous[step])
+        # update epsilon and readiness
         for i in range(0, self.total_agents):
             ff_i = self.firefly_array[i]
 
-            # discharging
+            # update epsilon to discharging (V is high enough)
             if ff_i.voltage_instantaneous[step-1] >= (2 * ff_i.voltage_threshold / 3):
-                if len(ff_i.flash_steps) == 0 and ff_i.nat_frequency < 3.14:
-                    ff_i.flash(step)
-                    ff_i.is_charging = 0
-                elif ff_i.flash_steps and step - ff_i.flash_steps[-1][-1] > ff_i.quiet_period:
-                    ff_i.flash(step)
-                    ff_i.is_charging = 0
+                if len(ff_i.ends_of_bursts) == 0:
+                    # this is the "waited enough time" step
+                    ff_i.set_ready()
+                elif len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
+                    ff_i.set_ready()
+                if ff_i.ready:
+                    ff_i.is_charging[step] = 0
 
-            # charging
+            # update epsilon to charging if agent flashes
             elif ff_i.voltage_instantaneous[step-1] <= ff_i.voltage_threshold / 3:
-                if not ff_i.is_charging:
-                    ff_i.is_charging = 1
+                if ff_i.is_charging[step-1] == 0 and ff_i.ready:
+                    ff_i.flash(step)
+                    ff_i.is_charging[step] = 1
+                if len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
+                    ff_i.set_ready()
+                if len(ff_i.ends_of_bursts) == 0 and not ff_i.flashed_at_this_step[step]:
+                    ff_i.set_ready()
 
         for i in range(0, self.total_agents):
             ff_i = self.firefly_array[i]
-            if ff_i.is_charging:
+            if ff_i.is_charging[step-1]:
                 dvt = (math.log(2)/ff_i.charging_time) * (ff_i.voltage_threshold - ff_i.voltage_instantaneous[step-1])
             else:
                 dvt = -(math.log(2)/ff_i.discharging_time) * ff_i.voltage_instantaneous[step-1]
@@ -160,6 +170,7 @@ class Simulation:
                     skip_dist = False
                     ff_j = self.firefly_array[j]
                     if self.obstacles:
+                        names = set()
                         if not skip_dist:
 
                             line = simulation_helpers.generate_line_points((ff_i.positionx[step], ff_i.positiony[step]),
@@ -169,21 +180,26 @@ class Simulation:
                                 if not skip_dist:
                                     for xy in line:
                                         if obstacle.contains(xy[0], xy[1]):
+                                            names = {ff_i.name, ff_j.name}
                                             skip_dist = True
                                             break
                         if skip_dist:
                             continue
-
-                    int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
-                    env_signal = env_signal + (1 - ff_j.is_charging)
+                        if not skip_dist:
+                            assert ff_i not in names
+                            assert ff_j not in names
+                            int_term = int_term - ff_i.beta * (abs(ff_i.is_charging[step] - ff_j.is_charging[step]))
+                            env_signal = env_signal + (1 - ff_j.is_charging[step])
+                    else:
+                        int_term = int_term - ff_i.beta * (abs(ff_i.is_charging[step] - ff_j.is_charging[step]))
+                        env_signal = env_signal + (1 - ff_j.is_charging[step])
 
                     # this is what one firefly contributes to the charging / discharging
             ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + dvt + int_term
-            if ff_i.switched:
-                ff_i.switched = False
+            if ff_i.voltage_instantaneous[step] <= 0:
                 ff_i.voltage_instantaneous[step] = 0
 
-        print(self.firefly_array[0].voltage_instantaneous[step])
+        # print(self.firefly_array[0].voltage_instantaneous[step])
 
     def kuramato_phase_interactions(self, step):
         """Each firefly's phase wave interacts with the phase wave of its detectable neighbors by the Kuramato model."""
@@ -288,32 +304,48 @@ class Simulation:
         plt.style.use('seaborn-pastel')
         fig = plt.figure()
         ax = plt.axes(xlim=(0, self.n), ylim=(0, self.n))
-        color_dict = self.setup_color_legend(ax)
+        if self.use_kuramato:
+            color_dict = self.setup_color_legend(ax, self.use_kuramato, self.use_integrate_and_fire)
 
         xdatas = {n: [] for n in range(0, self.total_agents)}
         ydatas = {n: [] for n in range(0, self.total_agents)}
 
         firefly_paths = [ax.plot([], [], '*')[0] for _ in self.firefly_array]
-        regression_line = ax.plot([], [], color=color_dict[0], linewidth=2)[0]
+        regression_line = ax.plot([], [], color='orange', linewidth=2)[0]
 
         def animate(i, flies, lines, wavestats, wave):
             for line, fly in zip(lines, flies):
                 xdatas[fly.number].append(fly.trace.get(i)[0])
                 ydatas[fly.number].append(fly.trace.get(i)[1])
                 line.set_data(xdatas[fly.number][0], ydatas[fly.number][0])
-                deg = math.degrees(fly.phase[i])
-                if deg < 0:
-                    deg += 360
-                line.set_color(color_dict[int(deg)])
+                if self.use_kuramato:
+                    deg = math.degrees(fly.phase[i])
+                    if deg < 0:
+                        deg += 360
+                    line.set_color(color_dict[int(deg)])
+                if self.use_integrate_and_fire:
+                    if fly.flashed_at_this_step[i]:
+                        line.set_color('red')
+                    else:
+                        line.set_color('blue')
+                    # voltage = fly.voltage_instantaneous[i]
+                    # line.set_color(color_dict[int(abs(voltage*100))])
                 xdatas[fly.number].pop(0)
                 ydatas[fly.number].pop(0)
-            all_xs = [fly.positionx for fly in flies if 0 <= fly.phase[i] < 1
-                      or 359 < fly.phase[i] <= 360
-                      # or ((fly.phase[i - 1] + fly.phase[i] - 2 * (360 - fly.phase[i - 1])) % 360 <= math.degrees(1.57))
-                      ]
+            if self.use_kuramato:
+                all_xs = [fly.positionx for fly in flies if 0 <= fly.phase[i] < 1
+                          or 359 < fly.phase[i] <= 360
+                          # or ((fly.phase[i - 1] + fly.phase[i] - 2 * (360 - fly.phase[i - 1])) % 360 <= math.degrees(1.57))
+                          ]
+            else:
+                all_xs = [fly.positionx for fly in flies if fly.flashed_at_this_step[i]]
             wave.set_xdata(all_xs)
             wave.set_ydata(wavestats[i]['regression'][0] * np.asarray(all_xs) + wavestats[i]['regression'][1])
-            ax.set_title('2D Walk Phase Interactions (step {})'.format(i) + self.boilerplate)
+            if self.use_kuramato:
+                title_str = "Kuramato Model"
+            else:
+                title_str = "Integrate-and-Fire Model"
+            ax.set_title('2D Walk {} Interactions (step {})'.format(title_str, i) + self.boilerplate)
             return lines, wave
 
         ax.set_xlim([0.0, self.n])
@@ -325,9 +357,10 @@ class Simulation:
             for obstacle in self.obstacles.obstacle_array:
                 ax.add_artist(plt.Circle((obstacle.centerx, obstacle.centery), obstacle.radius))
 
-        anim = FuncAnimation(fig, animate, frames=self.steps, fargs=(self.firefly_array, firefly_paths,
-                                                                     self.wave_statistics, regression_line),
-                             interval=100, blit=False)
+        interval = 50 if self.use_kuramato else 300
+        anim = FuncAnimation(fig, animate, frames=self.steps,
+                             fargs=(self.firefly_array, firefly_paths, self.wave_statistics, regression_line),
+                             interval=interval, blit=False)
         if self.use_obstacles:
             save_string = 'data/phaseanim_{}agents_{}x{}_k={}_steps={}_{}distribution{}_obstacles.gif'.format(
                 self.total_agents,
@@ -357,7 +390,7 @@ class Simulation:
         plt.style.use('seaborn-pastel')
         ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
         bursts_at_each_timestep = self.get_burst_data()
-        ax.plot(bursts_at_each_timestep.keys(), bursts_at_each_timestep.values())
+        ax.scatter(x=list(bursts_at_each_timestep.keys()), y=list(bursts_at_each_timestep.values()))
 
         ax.set_xlim([0.0, self.steps])
         ax.set_xlabel('Step')
@@ -389,32 +422,60 @@ class Simulation:
         if show_gif:
             plt.show()
 
+
     @staticmethod
-    def setup_color_legend(axis):
+    def setup_color_legend(axis, use_kuramato=True, use_integrate_and_fire=False):
         """Set the embedded color axis for the 2d correlated random walk that shows color-phase relations."""
-        steps = 360
-        color_dict = {}
-        hsv = matplotlib.cm.get_cmap('hsv', steps)
-        norm = matplotlib.colors.Normalize(0, 360)
-        display_axes = axis.inset_axes(bounds=[0.79, 0.01, 0.21, 0.01])
+        if use_kuramato:
+            steps = 360
 
-        cb = matplotlib.colorbar.ColorbarBase(display_axes,
-                                              cmap=matplotlib.cm.get_cmap('hsv', steps),
-                                              norm=norm,
-                                              orientation='horizontal')
-        cb.outline.set_visible(False)
-        x_formatter = FixedFormatter([
-            "0°", "90°", "180°", "270°", "360°"])
-        x_locator = FixedLocator([0, 90, 180, 270, 360])
-        display_axes.xaxis.tick_top()
-        display_axes.tick_params(axis="x", labelsize=6)
-        display_axes.set_xlim([0.0, 360.0])
-        display_axes.xaxis.set_major_formatter(x_formatter)
-        display_axes.xaxis.set_major_locator(x_locator)
+            color_dict = {}
+            cmap_seed = matplotlib.cm.get_cmap('hsv', steps)
+            norm = matplotlib.colors.Normalize(0, steps)
+            display_axes = axis.inset_axes(bounds=[0.79, 0.01, 0.21, 0.01])
 
-        cmap = matplotlib.colors.ListedColormap(hsv(np.tile(np.linspace(0, 1, steps), 2)))
-        for i, color in enumerate(cmap.colors):
-            color_dict[i] = color
+            cb = matplotlib.colorbar.ColorbarBase(display_axes,
+                                                  cmap=matplotlib.cm.get_cmap('hsv', steps),
+                                                  norm=norm,
+                                                  orientation='horizontal')
+            cb.outline.set_visible(False)
+            x_formatter = FixedFormatter([
+                "0°", "90°", "180°", "270°", "360°"])
+            x_locator = FixedLocator([0, 90, 180, 270, 360])
+            display_axes.xaxis.tick_top()
+            display_axes.tick_params(axis="x", labelsize=6)
+            display_axes.set_xlim([0.0, 360.0])
+            display_axes.xaxis.set_major_formatter(x_formatter)
+            display_axes.xaxis.set_major_locator(x_locator)
+
+            cmap = matplotlib.colors.ListedColormap(cmap_seed(np.tile(np.linspace(0, 1, steps), 2)))
+            for i, color in enumerate(cmap.colors):
+                color_dict[i] = color
+        else:
+            steps = 100
+
+            color_dict = {}
+            cmap_seed = matplotlib.cm.get_cmap('YlGnBu', steps)
+            norm = matplotlib.colors.Normalize(0, steps)
+            display_axes = axis.inset_axes(bounds=[0.79, 0.01, 0.21, 0.01])
+
+            cb = matplotlib.colorbar.ColorbarBase(display_axes,
+                                                  cmap=matplotlib.cm.get_cmap('YlGnBu', steps),
+                                                  norm=norm,
+                                                  orientation='horizontal')
+            cb.outline.set_visible(False)
+            x_formatter = FixedFormatter([
+                "0", ".2", ".4", ".6", ".8", "1.0"])
+            x_locator = FixedLocator([0, 20, 40, 60, 80, 100])
+            display_axes.xaxis.tick_top()
+            display_axes.tick_params(axis="x", labelsize=6)
+            display_axes.set_xlim([0.0, 100.0])
+            display_axes.xaxis.set_major_formatter(x_formatter)
+            display_axes.xaxis.set_major_locator(x_locator)
+
+            cmap = matplotlib.colors.ListedColormap(cmap_seed(np.tile(np.linspace(0, 1, steps), 2)))
+            for i, color in enumerate(cmap.colors):
+                color_dict[i] = color
 
         return color_dict
 
@@ -468,7 +529,6 @@ class Simulation:
         to_plot = {i: 0 for i in range(self.steps)}
         for step in range(self.steps):
             for firefly in self.firefly_array:
-                flat_list_of_steps = [item for sublist in firefly.flash_steps for item in sublist]
-                if step in flat_list_of_steps:
+                if firefly.flashed_at_this_step[step] is True:
                     to_plot[step] += 1
         return to_plot
