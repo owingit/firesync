@@ -29,3 +29,6 @@ class ObstacleGenerator:
         x = random.randint(2, self.arena_side_length - 2)
         y = random.randint(2, self.arena_side_length - 2)
         return x, y
+
+    def get_obstacles(self):
+        return self.obstacle_array

@@ -21,7 +21,7 @@ def main():
     experiment_results = run_simulations(simulations)
     plot_animations(experiment_results)
 
-    # plot_mean_vector_length_results(params, experiment_results)
+    plot_mean_vector_length_results(params, experiment_results)
 
 
 def set_constants():
@@ -32,7 +32,7 @@ def set_constants():
     num_agent_options = [10]  # , 500, 1000]
     step_count = 2000
     coupling_strengths = [0.03]  # , 0.2, 0.5]
-    num_trials = 2
+    num_trials = 1
     params[TSTARS] = thetastars
     params[TBS] = inter_burst_intervals
     params[NS] = side_length
@@ -68,6 +68,7 @@ def setup_simulations(params):
                             use_obstacles = False
                         n = params[NS]
                         step_count = params[STEPS]
+                        #for use_kuramato in [True, False]:
                         simulation = Simulation.Simulation(num_agents=num_agents,
                                                            side_length=n,
                                                            step_count=step_count,
@@ -75,7 +76,8 @@ def setup_simulations(params):
                                                            coupling_strength=coupling_strength,
                                                            Tb=Tb,
                                                            r_or_u="random",
-                                                           use_obstacles=use_obstacles) #use_obstacles)
+                                                           use_obstacles=False,
+                                                           use_kuramato=False)
                         simulations.append(simulation)
     return simulations
 
@@ -104,9 +106,12 @@ def plot_animations(experiment_results):
     now = datetime.now()
     for identifier, simulation_list in experiment_results.items():
         for simulation in simulation_list:
-            # simulation.animate_phase_bins(now, show_gif=False, write_gif=False)
-            simulation.plot_bursts(now, show_gif=False, write_gif=True)
-            # simulation.animate_walk(now, show_gif=True, write_gif=False)
+            if simulation.use_kuramato:
+                simulation.animate_phase_bins(now, show_gif=False, write_gif=True)
+                simulation.animate_walk(now, show_gif=False, write_gif=True)
+            else:
+                simulation.plot_bursts(now, show_gif=True, write_gif=False)
+                simulation.animate_walk(now, show_gif=True, write_gif=False)
 
 
 def plot_mean_vector_length_results(params, experiment_results):

@@ -16,9 +16,9 @@ import collections
 
 class Simulation:
     def __init__(self, num_agents, side_length, step_count, thetastar, coupling_strength, Tb, r_or_u="uniform",
-                 use_obstacles=False):
+                 use_obstacles=False, use_kuramato=True):
         self.firefly_array = []
-        self.use_kuramato = False
+        self.use_kuramato = use_kuramato
         self.use_integrate_and_fire = not self.use_kuramato
 
         # constants set by run.py
@@ -35,7 +35,7 @@ class Simulation:
         self.use_obstacles = use_obstacles
 
         self.has_run = False
-        self.obstacles = False
+        self.obstacles = None
         if self.use_obstacles is True:
             self.init_obstacles()
 
@@ -64,7 +64,8 @@ class Simulation:
     def init_obstacles(self):
         """Initialize an array of obstacles randomly placed throughout the arena."""
         num_obstacles = random.randint(10, 20)
-        self.obstacles = obstacle.ObstacleGenerator(num_obstacles, self.n)
+        obstacle_generator = obstacle.ObstacleGenerator(num_obstacles, self.n)
+        self.obstacles = obstacle_generator.get_obstacles()
 
     def init_stats(self):
         """Initialize per-timestep dictionaries tracking firefly phase and TODO: more things."""
@@ -130,36 +131,13 @@ class Simulation:
         self.has_run = True
 
     def integrate_and_fire_interactions(self, step):
-        # update epsilon and readiness
+        self.update_epsilon_and_readiness(step)
+        self.update_voltages(step)
+
+    def update_voltages(self, step):
         for i in range(0, self.total_agents):
             ff_i = self.firefly_array[i]
-
-            # update epsilon to discharging (V is high enough)
-            if ff_i.voltage_instantaneous[step-1] >= (2 * ff_i.voltage_threshold / 3):
-                if len(ff_i.ends_of_bursts) == 0:
-                    # this is the "waited enough time" step
-                    ff_i.set_ready()
-                elif len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
-                    ff_i.set_ready()
-                if ff_i.ready:
-                    ff_i.is_charging[step] = 0
-
-            # update epsilon to charging if agent flashes
-            elif ff_i.voltage_instantaneous[step-1] <= ff_i.voltage_threshold / 3:
-                if ff_i.is_charging[step-1] == 0 and ff_i.ready:
-                    ff_i.flash(step)
-                    ff_i.is_charging[step] = 1
-                if len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
-                    ff_i.set_ready()
-                if len(ff_i.ends_of_bursts) == 0 and not ff_i.flashed_at_this_step[step]:
-                    ff_i.set_ready()
-
-        for i in range(0, self.total_agents):
-            ff_i = self.firefly_array[i]
-            if ff_i.is_charging[step-1]:
-                dvt = (math.log(2)/ff_i.charging_time) * (ff_i.voltage_threshold - ff_i.voltage_instantaneous[step-1])
-            else:
-                dvt = -(math.log(2)/ff_i.discharging_time) * ff_i.voltage_instantaneous[step-1]
+            dvt = ff_i.set_dvt(step)
 
             int_term = 0
             env_signal = 0
@@ -170,36 +148,53 @@ class Simulation:
                     skip_dist = False
                     ff_j = self.firefly_array[j]
                     if self.obstacles:
-                        names = set()
                         if not skip_dist:
 
                             line = simulation_helpers.generate_line_points((ff_i.positionx[step], ff_i.positiony[step]),
                                                                            (ff_j.positionx[step], ff_j.positiony[step]),
                                                                            num_points=100)
-                            for obstacle in self.obstacles.obstacle_array:
+                            for obstacle in self.obstacles:
                                 if not skip_dist:
                                     for xy in line:
                                         if obstacle.contains(xy[0], xy[1]):
-                                            names = {ff_i.name, ff_j.name}
                                             skip_dist = True
                                             break
                         if skip_dist:
                             continue
-                        if not skip_dist:
-                            assert ff_i not in names
-                            assert ff_j not in names
-                            int_term = int_term - ff_i.beta * (abs(ff_i.is_charging[step] - ff_j.is_charging[step]))
-                            env_signal = env_signal + (1 - ff_j.is_charging[step])
+                        else:
+                            int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
+                            env_signal = env_signal + (1 - ff_j.is_charging)
                     else:
-                        int_term = int_term - ff_i.beta * (abs(ff_i.is_charging[step] - ff_j.is_charging[step]))
-                        env_signal = env_signal + (1 - ff_j.is_charging[step])
+                        int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
+                        env_signal = env_signal + (1 - ff_j.is_charging)
 
                     # this is what one firefly contributes to the charging / discharging
-            ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + dvt + int_term
-            if ff_i.voltage_instantaneous[step] <= 0:
-                ff_i.voltage_instantaneous[step] = 0
+            ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + (dvt + int_term) * 0.1
 
-        # print(self.firefly_array[0].voltage_instantaneous[step])
+    def update_epsilon_and_readiness(self, step):
+        # update epsilon and readiness
+        for i in range(0, self.total_agents):
+            ff_i = self.firefly_array[i]
+
+            # update epsilon to discharging (V is high enough)
+            if ff_i.voltage_instantaneous[step - 1] >= (2 * ff_i.voltage_threshold / 3):
+                if len(ff_i.ends_of_bursts) == 0:
+                    # this is the "waited enough time" step
+                    ff_i.set_ready()
+                elif len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
+                    ff_i.set_ready()
+                if ff_i.ready:
+                    ff_i.is_charging = 0
+
+            # update epsilon to charging if agent flashes
+            elif ff_i.voltage_instantaneous[step - 1] <= ff_i.voltage_threshold / 3:
+                if ff_i.is_charging == 0 and ff_i.ready:
+                    ff_i.flash(step)
+                    ff_i.is_charging = 1
+                if len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
+                    ff_i.set_ready()
+                if len(ff_i.ends_of_bursts) == 0 and not ff_i.flashed_at_this_step[step]:
+                    ff_i.set_ready()
 
     def kuramato_phase_interactions(self, step):
         """Each firefly's phase wave interacts with the phase wave of its detectable neighbors by the Kuramato model."""
@@ -218,7 +213,7 @@ class Simulation:
                             line = simulation_helpers.generate_line_points((ff_i.positionx[step], ff_i.positiony[step]),
                                                                            (ff_j.positionx[step], ff_j.positiony[step]),
                                                                            num_points=100)
-                            for obstacle in self.obstacles.obstacle_array:
+                            for obstacle in self.obstacles:
                                 if not skip_dist:
                                     for xy in line:
                                         if obstacle.contains(xy[0], xy[1]):
@@ -266,7 +261,7 @@ class Simulation:
             ax.set_title('Num agents with particular phase at step {}'.format(i) + self.boilerplate)
 
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=[self.num_fireflies_with_phase_x],
-                             interval=25, blit=False, repeat=False)
+                             interval=50, blit=False, repeat=False)
         save_string = 'data/numphaseovertime_{}agents_{}x{}_k={}_steps={}_{}distribution{}_gif.gif'.format(
                 self.total_agents,
                 self.n, self.n,
@@ -354,7 +349,7 @@ class Simulation:
         ax.set_ylim([0.0, self.n])
         ax.set_ylabel('Y')
         if self.obstacles:
-            for obstacle in self.obstacles.obstacle_array:
+            for obstacle in self.obstacles:
                 ax.add_artist(plt.Circle((obstacle.centerx, obstacle.centery), obstacle.radius))
 
         interval = 50 if self.use_kuramato else 300
@@ -390,7 +385,7 @@ class Simulation:
         plt.style.use('seaborn-pastel')
         ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
         bursts_at_each_timestep = self.get_burst_data()
-        ax.scatter(x=list(bursts_at_each_timestep.keys()), y=list(bursts_at_each_timestep.values()))
+        ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()))
 
         ax.set_xlim([0.0, self.steps])
         ax.set_xlabel('Step')

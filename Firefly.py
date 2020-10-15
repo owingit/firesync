@@ -30,7 +30,7 @@ class Firefly:
                     success = True
                     self.positionx[0] = random.randint(0, n)
                     self.positiony[0] = random.randint(0, n)
-                    for obstacle in obstacles.obstacle_array:
+                    for obstacle in obstacles:
                         if obstacle.contains(self.positionx[0], self.positiony[0]):
                             success = False
                     if success:
@@ -52,10 +52,10 @@ class Firefly:
         self.phase[0] = random.random() * math.pi * 2
 
         # integrate and fire params
-        self.beta = 0.415
+        self.beta = 0.1
         self.charging_time = 5
         self.discharging_time = 5
-        self.is_charging = np.ones(steps)
+        self.is_charging = 1
         self.voltage_threshold = 1
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
@@ -63,7 +63,7 @@ class Firefly:
         self.flashes_per_burst = random.randint(5, 8)
         self.flashes_left_in_current_burst = self.flashes_per_burst
         self.quiet_period = self.phrase_duration - (
-                (self.charging_time + self.discharging_time) * self.flashes_per_burst
+                 (self.charging_time + self.discharging_time) * self.flashes_per_burst
         )
         self.flashed_at_this_step = [False] * steps
         self.ends_of_bursts = []
@@ -118,7 +118,7 @@ class Firefly:
         self.positiony[current_step] = y
         self.boundary_conditions(current_step)
         if obstacles:
-            for obstacle in obstacles.obstacle_array:
+            for obstacle in obstacles:
                 if obstacle.contains(self.positionx[current_step], self.positiony[current_step]):
                     self.positionx[current_step] = self.positionx[current_step-1]
                     self.positiony[current_step] = self.positiony[current_step-1]
@@ -170,3 +170,11 @@ class Firefly:
             self.unset_ready()
             self.flashes_left_in_current_burst = self.flashes_per_burst
             self.ends_of_bursts.append(t)
+
+    def set_dvt(self, t):
+        prev_voltage = self.voltage_instantaneous[t - 1]
+        if self.is_charging:
+            dvt = (math.log(2) / (self.charging_time * 0.1)) * (self.voltage_threshold - prev_voltage)
+        else:
+            dvt = -(math.log(2) / (self.discharging_time * 0.1)) * prev_voltage
+        return dvt
