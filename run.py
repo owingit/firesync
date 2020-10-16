@@ -1,8 +1,9 @@
 import numpy as np
+import sys
 import Simulation
 import math
 import matplotlib.pyplot as plt
-import collections
+import json
 from datetime import datetime
 
 
@@ -13,26 +14,54 @@ NUM_AGENTS = "num_agents"
 STEPS = "steps"
 KS = "k"
 TRIALS = "trials"
+BETAS = "betas"
+PHRASE_DURATIONS = "phrases"
 
 
 def main():
     params = set_constants()
-    simulations = setup_simulations(params)
-    experiment_results = run_simulations(simulations)
+    if len(sys.argv) > 1:
+        db = sys.argv[1]
+        experiment_results = load_experiment_results(db)
+    else:
+        simulations = setup_simulations(params)
+        experiment_results = run_simulations(simulations)
     plot_animations(experiment_results)
+    for k in experiment_results.values():
+        for experiment in k:
+            result = [x.strip() for x in experiment.boilerplate.split(',')]
+            name = result[0] + result[1] + result[2]
+            dict_to_dump = {name: {
+                'all_paths': [ff_i.trace for ff_i in experiment.firefly_array],
+                'all_flash_steps': [ff.flashed_at_this_step for ff in experiment.firefly_array],
+                'all_phases': [firefly.phase.tolist() for firefly in experiment.firefly_array],
+                'all_voltages': [f.voltage_instantaneous.tolist() for f in experiment.firefly_array]
+            }}
+            json.dump(dict_to_dump,
+                      open("data/raw_experiment_results/{}_experiment_results_{}.json".format(name,datetime.now()),
+                           'w'))
 
     plot_mean_vector_length_results(params, experiment_results)
+
+
+def load_experiment_results(db_file):
+    with open(db_file, 'w+') as data:
+        json_dict = json.load(data)
+        print(json_dict)
+    return json_dict
 
 
 def set_constants():
     params = {}
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
-    side_length = 10
-    num_agent_options = [10]  # , 500, 1000]
-    step_count = 2000
+    side_length = 25
+    num_agent_options = [25]  # , 500, 1000]
+    step_count = 1000
     coupling_strengths = [0.03]  # , 0.2, 0.5]
-    num_trials = 1
+    num_trials = 2
+    params[PHRASE_DURATIONS] = [190]
+    params[BETAS] = [0.1]
     params[TSTARS] = thetastars
     params[TBS] = inter_burst_intervals
     params[NS] = side_length
@@ -61,24 +90,27 @@ def setup_simulations(params):
         for num_agents in params[NUM_AGENTS]:
             for coupling_strength in params[KS]:
                 for Tb in params[TBS]:
-                    for trial in range(0, params[TRIALS]):
-                        if trial % 2 == 0:
-                            use_obstacles = True
-                        else:
-                            use_obstacles = False
-                        n = params[NS]
-                        step_count = params[STEPS]
-                        #for use_kuramato in [True, False]:
-                        simulation = Simulation.Simulation(num_agents=num_agents,
-                                                           side_length=n,
-                                                           step_count=step_count,
-                                                           thetastar=thetastar,
-                                                           coupling_strength=coupling_strength,
-                                                           Tb=Tb,
-                                                           r_or_u="random",
-                                                           use_obstacles=False,
-                                                           use_kuramato=False)
-                        simulations.append(simulation)
+                    for beta in params[BETAS]:
+                        for phrase_duration in params[PHRASE_DURATIONS]:
+                            for trial in range(0, params[TRIALS]):
+                                if trial % 2 == 0:
+                                    use_obstacles = True
+                                else:
+                                    use_obstacles = False
+                                n = params[NS]
+                                step_count = params[STEPS]
+                                simulation = Simulation.Simulation(num_agents=num_agents,
+                                                                   side_length=n,
+                                                                   step_count=step_count,
+                                                                   thetastar=thetastar,
+                                                                   coupling_strength=coupling_strength,
+                                                                   Tb=Tb,
+                                                                   beta=beta,
+                                                                   phrase_duration=phrase_duration,
+                                                                   r_or_u="random",
+                                                                   use_obstacles=use_obstacles,
+                                                                   use_kuramato=False)
+                                simulations.append(simulation)
     return simulations
 
 
@@ -110,8 +142,8 @@ def plot_animations(experiment_results):
                 simulation.animate_phase_bins(now, show_gif=False, write_gif=True)
                 simulation.animate_walk(now, show_gif=False, write_gif=True)
             else:
-                simulation.plot_bursts(now, show_gif=True, write_gif=False)
-                simulation.animate_walk(now, show_gif=True, write_gif=False)
+                simulation.plot_bursts(now, show_gif=False, write_gif=True)
+                simulation.animate_walk(now, show_gif=False, write_gif=True)
 
 
 def plot_mean_vector_length_results(params, experiment_results):

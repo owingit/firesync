@@ -7,8 +7,7 @@ import simulation_helpers
 class Firefly:
     #  Number, total number, theta*, thetastar_range, box dimension, number of steps,
     #  starting distribution, whether initially fed, whether to use periodic boundary conditions
-    def __init__(self, i, total, tstar, tstar_range,
-                 n, steps, r_or_u,
+    def __init__(self, i, total, tstar, tstar_range, n, steps, r_or_u, beta, phrase_duration,
                  use_periodic_boundary_conditions=True,
                  tb=1.57, obstacles=None):
         self.name = "FF #{}".format(i)
@@ -47,24 +46,27 @@ class Firefly:
         self.direction_set = False
         self.ready = False
         self.theta_star = tstar
+        self.timestepsize = 0.1
 
         self.phase = np.zeros(steps)
         self.phase[0] = random.random() * math.pi * 2
 
         # integrate and fire params
-        self.beta = 0.1
+        self.beta = beta
         self.charging_time = 5
-        self.discharging_time = 5
+        self.discharging_time = 5  # timesteps, where each timestep = 0.1s
         self.is_charging = 1
         self.voltage_threshold = 1
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
-        self.phrase_duration = 200  # ms
-        self.flashes_per_burst = random.randint(5, 8)
+        self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
+        self.flashes_per_burst = 7  # random.randint(5, 8)
         self.flashes_left_in_current_burst = self.flashes_per_burst
         self.quiet_period = self.phrase_duration - (
                  (self.charging_time + self.discharging_time) * self.flashes_per_burst
         )
+        self.charging_time = self.charging_time * self.timestepsize
+        self.discharging_time = self.charging_time * self.timestepsize
         self.flashed_at_this_step = [False] * steps
         self.ends_of_bursts = []
 
@@ -174,7 +176,7 @@ class Firefly:
     def set_dvt(self, t):
         prev_voltage = self.voltage_instantaneous[t - 1]
         if self.is_charging:
-            dvt = (math.log(2) / (self.charging_time * 0.1)) * (self.voltage_threshold - prev_voltage)
+            dvt = (math.log(2) / (self.charging_time)) * (self.voltage_threshold - prev_voltage)
         else:
-            dvt = -(math.log(2) / (self.discharging_time * 0.1)) * prev_voltage
+            dvt = -(math.log(2) / (self.discharging_time)) * prev_voltage
         return dvt
