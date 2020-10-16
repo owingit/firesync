@@ -25,6 +25,8 @@ class Simulation:
         self.timestepsize = 0.1
         self.use_kuramato = use_kuramato
         self.use_integrate_and_fire = not self.use_kuramato
+        self.beta = beta
+        self.phrase_duration = phrase_duration
 
         # constants set by run.py
         self.total_agents = num_agents
@@ -317,8 +319,6 @@ class Simulation:
     def animate_walk(self, now, write_gif=False, show_gif=False):
         """Animate the 2d correlated random walks of all fireflies, colored by phase."""
         assert self.has_run, "Animation cannot render until the simulation has been run!"
-        beta = self.firefly_array[0].beta
-        phrase_duration = self.firefly_array[0].phrase_duration
         plt.style.use('seaborn-pastel')
         fig = plt.figure()
         ax = plt.axes(xlim=(0, self.n), ylim=(0, self.n))
@@ -330,13 +330,18 @@ class Simulation:
 
         firefly_paths = [ax.plot([], [], '*')[0] for _ in self.firefly_array]
 
-        # uncomment to enable regression line
+        # uncomment for velocity line
         # regression_line = ax.plot([], [], color='orange', linewidth=2)[0]
 
+        # uncomment for velocity line
         def animate(i, flies, lines, wavestats): #wave):
             for line, fly in zip(lines, flies):
-                xdatas[fly.number].append(fly.trace.get(i)[0])
-                ydatas[fly.number].append(fly.trace.get(i)[1])
+                if not fly.trace.get(i):
+                    step_key = str(i)
+                else:
+                    step_key = i
+                xdatas[fly.number].append(fly.trace.get(step_key)[0])
+                ydatas[fly.number].append(fly.trace.get(step_key)[1])
                 line.set_data(xdatas[fly.number][0], ydatas[fly.number][0])
                 if self.use_kuramato:
                     deg = math.degrees(fly.phase[i])
@@ -350,6 +355,8 @@ class Simulation:
                         line.set_color('blue')
                 xdatas[fly.number].pop(0)
                 ydatas[fly.number].pop(0)
+
+            # uncomment for velocity line
             # if self.use_kuramato:
             #     all_xs = [fly.positionx for fly in flies if 0 <= fly.phase[i] < 1
             #               or 359 < fly.phase[i] <= 360
@@ -377,41 +384,49 @@ class Simulation:
 
         interval = 50 if self.use_kuramato else 300
         anim = FuncAnimation(fig, animate, frames=self.steps,
-                             fargs=(self.firefly_array, firefly_paths, self.wave_statistics),
+                             fargs=(self.firefly_array, firefly_paths),
+                                    # uncomment for velocity line
+                                    # self.wave_statistics,
                                     # regression_line),
                              interval=interval, blit=False)
-        if self.use_obstacles:
-            save_string = 'data/phaseanim_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}_obstacles.gif'.format(
-                self.total_agents,
-                self.n, self.n,
-                beta,
-                phrase_duration,
-                self.coupling_strength,
-                self.steps,
-                self.r_or_u,
-                now
-            )
-        else:
-            save_string = 'data/phaseanim_{}agents_{}x{}_{}beta_{}Tb_k={}_steps={}_{}distribution{}.gif'.format(
-                self.total_agents,
-                self.n, self.n,
-                beta,
-                phrase_duration,
-                self.coupling_strength,
-                self.steps,
-                self.r_or_u,
-                now
-            )
+
+        save_string = self.set_save_string('phaseanim', now)
         if write_gif:
             anim.save(save_string)
         if show_gif:
             plt.show()
+        plt.clf()
+
+    def set_save_string(self, plot_type, now):
+        if self.use_obstacles:
+            save_string = 'data/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}_obstacles.gif'.format(
+                plot_type,
+                self.total_agents,
+                self.n, self.n,
+                self.beta,
+                self.phrase_duration,
+                self.coupling_strength,
+                self.steps,
+                self.r_or_u,
+                now.replace(" ", "")
+            )
+        else:
+            save_string = 'data/{}_{}agents_{}x{}_{}beta_{}Tb_k={}_steps={}_{}distribution{}.gif'.format(
+                plot_type,
+                self.total_agents,
+                self.n, self.n,
+                self.beta,
+                self.phrase_duration,
+                self.coupling_strength,
+                self.steps,
+                self.r_or_u,
+                now.replace(" ", "")
+            )
+        return save_string
 
     def plot_bursts(self, now, write_gif=False, show_gif=False):
         """Plot the flash bursts over time"""
         assert self.has_run, "Plot cannot render until the simulation has been run!"
-        beta = self.firefly_array[0].beta
-        phrase_duration = self.firefly_array[0].phrase_duration
         plt.style.use('seaborn-pastel')
         ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
         bursts_at_each_timestep = self.get_burst_data()
@@ -423,29 +438,8 @@ class Simulation:
         ax.set_ylim([0.0, self.total_agents])
         ax.set_ylabel('Number of flashers at timestep')
         plt.title('Flashes over time' + self.boilerplate)
+        save_string = self.set_save_string('flashplot', now)
 
-        if self.use_obstacles:
-            save_string = 'data/flashplot_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution_{}_obstacles.png'.format(
-                self.total_agents,
-                self.n, self.n,
-                beta,
-                phrase_duration,
-                self.coupling_strength,
-                self.steps,
-                self.r_or_u,
-                now
-            )
-        else:
-            save_string = 'data/flashplot_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution_{}.png'.format(
-                self.total_agents,
-                self.n, self.n,
-                beta,
-                phrase_duration,
-                self.coupling_strength,
-                self.steps,
-                self.r_or_u,
-                now
-            )
         if write_gif:
             plt.savefig(save_string)
         if show_gif:

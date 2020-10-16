@@ -1,4 +1,5 @@
 import numpy as np
+import obstacle as ob
 import sys
 import Simulation
 import math
@@ -17,38 +18,103 @@ TRIALS = "trials"
 BETAS = "betas"
 PHRASE_DURATIONS = "phrases"
 
+PHASE_KEY = 'all_phases'
+VOLTAGE_KEY = 'all_voltages'
+TRACE_KEY = 'all_paths'
+FLASH_KEY = 'all_flash_steps'
+OBSTACLE_KEY = 'obstacles'
+DISTANCE_KEY = 'distances'
+
+USE_KURAMATO = False
+
 
 def main():
     params = set_constants()
+    now = datetime.now()
     if len(sys.argv) > 1:
         db = sys.argv[1]
-        experiment_results = load_experiment_results(db)
+        obstacle_flag = False
+        if 'obstacles' in db:
+            obstacle_flag = True
+        raw_experiment_results = load_experiment_results(db)
+        experiment_results = process_results_from_file(raw_experiment_results, params, obstacle_flag)
     else:
         simulations = setup_simulations(params)
         experiment_results = run_simulations(simulations)
-    plot_animations(experiment_results)
+        write_results(experiment_results, now)
+
+    plot_animations(experiment_results, now)
+    if USE_KURAMATO:
+        plot_mean_vector_length_results(params, experiment_results)
+
+
+def write_results(experiment_results, now):
     for k in experiment_results.values():
         for experiment in k:
             result = [x.strip() for x in experiment.boilerplate.split(',')]
             name = result[0] + result[1] + result[2]
             dict_to_dump = {name: {
-                'all_paths': [ff_i.trace for ff_i in experiment.firefly_array],
-                'all_flash_steps': [ff.flashed_at_this_step for ff in experiment.firefly_array],
-                'all_phases': [firefly.phase.tolist() for firefly in experiment.firefly_array],
-                'all_voltages': [f.voltage_instantaneous.tolist() for f in experiment.firefly_array]
-            }}
+                TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
+                FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
+                PHASE_KEY: [firefly.phase.tolist() for firefly in experiment.firefly_array],
+                VOLTAGE_KEY: [f.voltage_instantaneous.tolist() for f in experiment.firefly_array],
+                OBSTACLE_KEY: [(obstacle.centerx, obstacle.centery, obstacle.radius)
+                               for obstacle in experiment.obstacles],
+                DISTANCE_KEY: experiment.distance_statistics
+            }
+            }
             json.dump(dict_to_dump,
-                      open("data/raw_experiment_results/{}_experiment_results_{}.json".format(name,datetime.now()),
+                      open("data/raw_experiment_results/{}_experiment_results_{}.json".format(
+                          name, now.replace(" ", "")),
                            'w'))
-
-    plot_mean_vector_length_results(params, experiment_results)
 
 
 def load_experiment_results(db_file):
-    with open(db_file, 'w+') as data:
+    with open(db_file, 'rb+') as data:
         json_dict = json.load(data)
         print(json_dict)
     return json_dict
+
+
+def process_results_from_file(raw_experiment_results, params, if_obstacles, if_kuramato=USE_KURAMATO):
+    print(raw_experiment_results)
+    name = list(raw_experiment_results.keys())[0]
+    num_agents = len(list(raw_experiment_results[name].get(TRACE_KEY)))
+    num_steps = len(list(raw_experiment_results[name].get(TRACE_KEY)[0].keys()))
+    beta = float(name.split('beta')[0].split('density')[1])
+    phrase_duration = int(name.split('beta')[1].split('Tb')[0])
+    dummy_simulation = Simulation.Simulation(num_agents=num_agents,
+                                             side_length=params[NS], step_count=num_steps, thetastar=math.pi * 2,
+                                             coupling_strength=0.03,
+                                             Tb=1.57,
+                                             beta=beta, phrase_duration=phrase_duration, r_or_u="uniform",
+                                             use_obstacles=if_obstacles, use_kuramato=if_kuramato)
+    dummy_simulation.has_run = True
+
+    for i, firefly in enumerate(dummy_simulation.firefly_array):
+        firefly.phase = raw_experiment_results[name].get(PHASE_KEY)[i]
+        firefly.trace = raw_experiment_results[name].get(TRACE_KEY)[i]
+        for step, p in firefly.trace.items():
+            firefly.positionx[int(step)] = p[0]
+            firefly.positiony[int(step)] = p[1]
+        firefly.flashed_at_this_step = raw_experiment_results[name].get(FLASH_KEY)[i]
+        firefly.voltage_instantaneous = raw_experiment_results[name].get(VOLTAGE_KEY)[i]
+
+    if raw_experiment_results[name].get(OBSTACLE_KEY):
+        dummy_simulation.obstacles = [ob.Obstacle(blob[0], blob[1], blob[2])
+                                      for blob in raw_experiment_results[name].get(OBSTACLE_KEY)]
+
+    if if_kuramato:
+        result_key = frozenset((dummy_simulation.tstar_seed,
+                                dummy_simulation.Tb,
+                                dummy_simulation.total_agents,
+                                dummy_simulation.coupling_strength))
+    else:
+        result_key = frozenset((dummy_simulation.beta,
+                                dummy_simulation.phrase_duration,
+                                dummy_simulation.total_agents,
+                                dummy_simulation.n))
+    return {result_key: [dummy_simulation]}
 
 
 def set_constants():
@@ -56,8 +122,8 @@ def set_constants():
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
     side_length = 25
-    num_agent_options = [25]  # , 500, 1000]
-    step_count = 1000
+    num_agent_options = [36]  # , 500, 1000]
+    step_count = 1600
     coupling_strengths = [0.03]  # , 0.2, 0.5]
     num_trials = 2
     params[PHRASE_DURATIONS] = [190]
@@ -109,7 +175,7 @@ def setup_simulations(params):
                                                                    phrase_duration=phrase_duration,
                                                                    r_or_u="random",
                                                                    use_obstacles=use_obstacles,
-                                                                   use_kuramato=False)
+                                                                   use_kuramato=USE_KURAMATO)
                                 simulations.append(simulation)
     return simulations
 
@@ -122,10 +188,16 @@ def run_simulations(simulations):
     experiment_results = {}
     for count, simulation in enumerate(simulations):
         simulation.run()
-        result_key = frozenset((simulation.tstar_seed,
-                                simulation.Tb,
-                                simulation.total_agents,
-                                simulation.coupling_strength))
+        if simulation.use_kuramato:
+            result_key = frozenset((simulation.tstar_seed,
+                                    simulation.Tb,
+                                    simulation.total_agents,
+                                    simulation.coupling_strength))
+        else:
+            result_key = frozenset((simulation.beta,
+                                    simulation.phrase_duration,
+                                    simulation.total_agents,
+                                    simulation.n))
         if experiment_results.get(result_key):
             experiment_results[result_key].append(simulation)
         else:
@@ -133,9 +205,8 @@ def run_simulations(simulations):
     return experiment_results
 
 
-def plot_animations(experiment_results):
+def plot_animations(experiment_results, now):
     """Call a simulation's animation functionality."""
-    now = datetime.now()
     for identifier, simulation_list in experiment_results.items():
         for simulation in simulation_list:
             if simulation.use_kuramato:
