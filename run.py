@@ -1,12 +1,12 @@
-import numpy as np
-import obstacle as ob
-import sys
-import Simulation
-import math
-import matplotlib.pyplot as plt
 import json
+import math
+import sys
 from datetime import datetime
 
+import matplotlib.pyplot as plt
+
+import Simulation
+import obstacle as ob
 
 TSTARS = "theta*"
 TBS = "Tb"
@@ -44,11 +44,13 @@ def main():
         write_results(experiment_results, now)
 
     plot_animations(experiment_results, now)
+    print("done")
     if USE_KURAMATO:
         plot_mean_vector_length_results(params, experiment_results)
 
 
 def write_results(experiment_results, now):
+    n = now.replace(" ", "_")
     for k in experiment_results.values():
         for experiment in k:
             result = [x.strip() for x in experiment.boilerplate.split(',')]
@@ -63,10 +65,8 @@ def write_results(experiment_results, now):
                 DISTANCE_KEY: experiment.distance_statistics
             }
             }
-            json.dump(dict_to_dump,
-                      open("data/raw_experiment_results/{}_experiment_results_{}.json".format(
-                          name, now.replace(" ", "")),
-                           'w'))
+            json.dump(dict_to_dump, open("data/raw_experiment_results/{}_experiment_results_{}.json".format(
+                name, n, 'w')))
 
 
 def load_experiment_results(db_file):

@@ -1,18 +1,16 @@
-import simulation_helpers
-import numpy as np
-import json
-import Firefly
-import random
-import matplotlib.pyplot as plt
-import matplotlib
-from matplotlib.ticker import FixedLocator, FixedFormatter
-from scipy import stats
-import statistics
-import obstacle
-import math
-from matplotlib.animation import FuncAnimation
 import collections
+import math
+import random
 
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.animation import FuncAnimation
+from matplotlib.ticker import FixedLocator, FixedFormatter
+
+import Firefly
+import obstacle
+import simulation_helpers
 
 IS_TEST = False
 

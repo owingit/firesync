@@ -1,6 +1,8 @@
-import random
-import numpy as np
 import math
+import random
+
+import numpy as np
+
 import simulation_helpers
 
 
