@@ -47,3 +47,15 @@ def generate_line_points(pointa, pointb, num_points):
     y_spacing = (pointb[1] - pointa[1]) / (num_points + 1)
 
     return [[pointa[0] + i * x_spacing, pointa[1] + i * y_spacing] for i in range(1, num_points + 1)]
+
+
+def centroid(points):
+    x_coords = [p[0] for p in points]
+    y_coords = [p[1] for p in points]
+    _len = len(points)
+    if _len > 0:
+        centroid_x = sum(x_coords) / _len
+        centroid_y = sum(y_coords) / _len
+        return [centroid_x, centroid_y]
+    else:
+        return None

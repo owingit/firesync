@@ -1,10 +1,17 @@
 import collections
+from bokeh.io import output_file, show
+from bokeh.models import Ellipse, GraphRenderer, StaticLayoutProvider
+from bokeh.models.graphs import from_networkx
+from bokeh.palettes import Spectral8
+from bokeh.plotting import figure
 import math
 import random
 
+import networkx as nx
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import animation
 from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import FixedLocator, FixedFormatter
 
@@ -62,6 +69,11 @@ class Simulation:
             self.boilerplate = '{}density, {}beta, {}Tb'.format(self.total_agents / (self.n * self.n),
                                                                 beta, phrase_duration)
 
+        self.delta_t = 10 * [ff.charging_time + ff.discharging_time for ff in [self.firefly_array[0]]][0]
+        self.delta_x = {}
+        self.connection_probability = None
+        self.networks = []
+
         if self.use_obstacles:
             self.boilerplate = self.boilerplate + '_obstacles'
         # statistics reporting
@@ -86,9 +98,20 @@ class Simulation:
         # list of x,y coordinates that flashed at time t
         for t in range(self.steps):
             self.distance_statistics[t] = {}
-        initial_flashers = [(ff.positionx, ff.positiony) for ff in self.firefly_array if ff.flashed_at_this_step[0]]
+        initial_flashers = [(ff.positionx[0], ff.positiony[0]) for ff in self.firefly_array if ff.flashed_at_this_step[0]]
         self.distance_statistics[0] = {'length': len(initial_flashers),
                                        'positions': initial_flashers}
+
+        if initial_flashers:
+            centroid = simulation_helpers.centroid(initial_flashers)
+        else:
+            centroid = 1.0
+        for i in range(int(self.delta_t)):
+            if centroid:
+                self.delta_x[i] = centroid
+            else:
+                self.delta_x[i] = 1.0
+        self.connection_probability = 1 / max(list(self.delta_x.keys()))
 
         phase_zero_fireflies = []
         for firefly in self.firefly_array:
@@ -145,19 +168,76 @@ class Simulation:
                     [ff.voltage_instantaneous[step] * 2*math.pi for ff in self.firefly_array]))
             self.mean_resultant_vector_length[step] = float(mean_resultant_vector_length)
 
-            flashers_at_time_t = [(ff.positionx, ff.positiony)
+            flashers_at_time_t = [(ff.positionx[step], ff.positiony[step], ff.number)
                                   for ff in self.firefly_array if ff.flashed_at_this_step[step]]
+
             self.distance_statistics[step] = {'length': len(flashers_at_time_t),
                                               'positions': flashers_at_time_t}
+
+            if not self.delta_x.get(step):
+                network = nx.Graph()
+                # save all the flashers
+                all_flashers = []
+                i_s = []
+                for i, timestep in enumerate(self.distance_statistics.values()):
+                    if step - self.delta_t < i < step:
+                        i_s.append(i)
+                        all_flashers.extend(timestep['positions'])
+                # randomly wire the network
+                for flash_point in all_flashers:
+                    for flash_point_partner in all_flashers:
+                        if flash_point_partner == flash_point:
+                            continue
+                        else:
+                            if random.random() <= self.connection_probability:
+                                network.add_edge(flash_point[2], flash_point_partner[2])
+                                nx.set_node_attributes(network, values={flash_point[2]:
+                                                                        [flash_point[0], flash_point[1]],
+                                                                        flash_point_partner[2]:
+                                                                        [flash_point_partner[0],
+                                                                        flash_point_partner[1]]
+                                                                        },
+                                                       name="xypositions")
+
+                node_indices = (list(network.nodes()))
+                self.networks.append(network)
+
+                x = [network.nodes[node]['xypositions'][0] for node in network.nodes()]
+                y = [network.nodes[node]['xypositions'][1] for node in network.nodes()]
+
+                graph_layout = dict(zip(node_indices, zip(x, y)))
+                print(network.nodes())
+                graph = from_networkx(network, layout_function=graph_layout)
+                graph.layout_provider = StaticLayoutProvider(graph_layout=graph_layout)
+                plot = figure(title='Network embedding, t={}-{}'.format(min(i_s), max(i_s)), x_range=(0, self.n),
+                              y_range=(0, self.n),
+                              tools='', toolbar_location=None)
+                plot.renderers.append(graph)
+
+                output_file('graph.html')
+                show(plot)
+
+                centroid = simulation_helpers.centroid(flashers_at_time_t)
+                if centroid is not None:
+                    k_mean_differences = [np.sqrt((x - centroid[0]) ** 2 + (y - centroid[1]) ** 2) for (x, y, _) in
+                                          flashers_at_time_t]
+                else:
+                    k_mean_differences = 1.0
+                num_keys = max(list(self.delta_x.keys()))
+                for i in range(int(num_keys), int(num_keys + self.delta_t)):
+                    self.delta_x[i] = np.mean(k_mean_differences)
+                print('f')
 
         self.has_run = True
 
     def integrate_and_fire_interactions(self, step):
         self.update_epsilon_and_readiness(step)
-        self.update_voltages(step)
+        influential_neighbors = self.update_voltages(step)
 
     def update_voltages(self, step):
+        influential_neighbors = {}
         for i in range(0, self.total_agents):
+            influential_neighbors[i] = []
             ff_i = self.firefly_array[i]
             dvt = ff_i.set_dvt(step)
 
@@ -184,14 +264,17 @@ class Simulation:
                         if skip_dist:
                             continue
                         else:
+                            influential_neighbors[i].append(ff_j.number)
                             int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
                             env_signal = env_signal + (1 - ff_j.is_charging)
                     else:
+                        influential_neighbors[i].append(ff_j.number)
                         int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
                         env_signal = env_signal + (1 - ff_j.is_charging)
 
                     # this is what one firefly contributes to the charging / discharging
             ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + (dvt + int_term) * self.timestepsize
+        return influential_neighbors
 
     def update_epsilon_and_readiness(self, step):
         # update epsilon and readiness
@@ -243,9 +326,13 @@ class Simulation:
                                             break
                         if skip_dist:
                             continue
+                        else:
+                            dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
+                                    (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
 
-                    dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
-                            (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
+                    else:
+                        dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
+                                (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
                     if dist == 0:
                         continue
                     kuramato_term = math.sin(ff_j.phase[step - 1] - ff_i.phase[step - 1]) / dist
@@ -261,8 +348,6 @@ class Simulation:
     def animate_phase_bins(self, now, write_gif=False, show_gif=False):
         """Animate the # of ff's in each phase (0 -> 2*pi) over time."""
         assert self.has_run, "Animation cannot render until the simulation has been run!"
-        beta = self.firefly_array[0].beta
-        phrase_duration = self.firefly_array[0].phrase_duration
         plt.style.use('seaborn-pastel')
         num_bins = 360
         fig = plt.figure()
@@ -287,37 +372,19 @@ class Simulation:
         anim = FuncAnimation(fig, animate, frames=self.steps, fargs=[self.num_fireflies_with_phase_x],
                              interval=50, blit=False, repeat=False)
 
-        if self.use_obstacles:
-            save_string = 'data/numphaseovertime_{}agents_{}x{}_beta={}_Td={}_k={}_steps={}_{}distribution{}_obstacles.gif'.format(
-                self.total_agents,
-                self.n, self.n,
-                beta,
-                phrase_duration,
-                self.coupling_strength,
-                self.steps,
-                self.r_or_u,
-                now
-            )
-        else:
-            save_string = 'data/numphaseovertime_{}agents_{}x{}_{}beta_{}Td_k={}_steps={}_{}distribution{}.gif'.format(
-                self.total_agents,
-                self.n, self.n,
-                beta,
-                phrase_duration,
-                self.coupling_strength,
-                self.steps,
-                self.r_or_u,
-                now
-            )
+        save_string = self.set_save_string('numphaseovertime', now)
         if write_gif:
-            anim.save(save_string)
+            writervideo = animation.FFMpegWriter(fps=10)
+            anim.save(save_string, writer=writervideo)
         if show_gif:
             plt.show()
+        plt.clf()
 
     def animate_walk(self, now, write_gif=False, show_gif=False):
         """Animate the 2d correlated random walks of all fireflies, colored by phase."""
         assert self.has_run, "Animation cannot render until the simulation has been run!"
         plt.style.use('seaborn-pastel')
+        plt.clf()
         fig = plt.figure()
         ax = plt.axes(xlim=(0, self.n), ylim=(0, self.n))
         if self.use_kuramato:
@@ -332,7 +399,7 @@ class Simulation:
         # regression_line = ax.plot([], [], color='orange', linewidth=2)[0]
 
         # uncomment for velocity line
-        def animate(i, flies, lines, wavestats): #wave):
+        def animate(i, flies, lines): # wavestats): #wave):
             for line, fly in zip(lines, flies):
                 if not fly.trace.get(i):
                     step_key = str(i)
@@ -390,14 +457,19 @@ class Simulation:
 
         save_string = self.set_save_string('phaseanim', now)
         if write_gif:
-            anim.save(save_string)
+            writervideo = animation.FFMpegWriter(fps=10)
+            anim.save(save_string, writer=writervideo)
         if show_gif:
             plt.show()
-        plt.clf()
+        # plt.clf()
 
     def set_save_string(self, plot_type, now):
+        if plot_type == 'phaseanim' or plot_type == 'numphaseovertime':
+            end = '.mp4'
+        else:
+            end = '.png'
         if self.use_obstacles:
-            save_string = 'data/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}_obstacles.gif'.format(
+            save_string = 'data/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}_obstacles{}'.format(
                 plot_type,
                 self.total_agents,
                 self.n, self.n,
@@ -406,10 +478,11 @@ class Simulation:
                 self.coupling_strength,
                 self.steps,
                 self.r_or_u,
-                now.replace(" ", "")
+                now,
+                end
             )
         else:
-            save_string = 'data/{}_{}agents_{}x{}_{}beta_{}Tb_k={}_steps={}_{}distribution{}.gif'.format(
+            save_string = 'data/{}_{}agents_{}x{}_beta={}Tb={}_k={}_steps={}_{}distribution{}{}'.format(
                 plot_type,
                 self.total_agents,
                 self.n, self.n,
@@ -418,31 +491,46 @@ class Simulation:
                 self.coupling_strength,
                 self.steps,
                 self.r_or_u,
-                now.replace(" ", "")
+                now,
+                end
             )
         return save_string
 
-    def plot_bursts(self, now, write_gif=False, show_gif=False):
+    def plot_bursts(self, now, write_gif=False, show_gif=False, shared_ax=None):
         """Plot the flash bursts over time"""
         assert self.has_run, "Plot cannot render until the simulation has been run!"
         plt.style.use('seaborn-pastel')
-        ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
-        bursts_at_each_timestep = self.get_burst_data()
-        ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()))
+        if self.use_obstacles:
+            color = 'green'
+            label = 'obstacles'
+        else:
+            color = 'blue'
+            label = 'no_obstacles'
+        if not shared_ax:
+            ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
+            bursts_at_each_timestep = self.get_burst_data()
+            ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()),
+                    label=label, color=color)
 
-        ax.set_xlim([0.0, self.steps])
-        ax.set_xlabel('Step')
+            ax.set_xlim([0.0, self.steps])
+            ax.set_xlabel('Step')
 
-        ax.set_ylim([0.0, self.total_agents])
-        ax.set_ylabel('Number of flashers at timestep')
-        plt.title('Flashes over time' + self.boilerplate)
-        save_string = self.set_save_string('flashplot', now)
+            ax.set_ylim([0.0, self.total_agents])
+            ax.set_ylabel('Number of flashers at timestep')
+            plt.title('Flashes over time' + self.boilerplate)
+            plt.legend()
+        else:
+            bursts_at_each_timestep = self.get_burst_data()
+            shared_ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()),
+                           label=label, color=color)
 
-        if write_gif:
-            plt.savefig(save_string)
-        if show_gif:
-            plt.show()
-        plt.clf()
+        if not shared_ax:
+            save_string = self.set_save_string('flashplot', now)
+
+            if write_gif:
+                plt.savefig(save_string)
+            if show_gif:
+                plt.show()
 
     @staticmethod
     def setup_color_legend(axis, use_kuramato=True, use_integrate_and_fire=False):

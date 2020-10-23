@@ -68,7 +68,7 @@ class Firefly:
                  (self.charging_time + self.discharging_time) * self.flashes_per_burst
         )
         self.charging_time = self.charging_time * self.timestepsize
-        self.discharging_time = self.charging_time * self.timestepsize
+        self.discharging_time = self.discharging_time * self.timestepsize
         self.flashed_at_this_step = [False] * steps
         self.ends_of_bursts = []
 
