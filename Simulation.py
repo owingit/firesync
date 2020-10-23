@@ -1,9 +1,4 @@
 import collections
-from bokeh.io import output_file, show
-from bokeh.models import Ellipse, GraphRenderer, StaticLayoutProvider
-from bokeh.models.graphs import from_networkx
-from bokeh.palettes import Spectral8
-from bokeh.plotting import figure
 import math
 import random
 
@@ -102,15 +97,16 @@ class Simulation:
         self.distance_statistics[0] = {'length': len(initial_flashers),
                                        'positions': initial_flashers}
 
+        centroid = None
         if initial_flashers:
             centroid = simulation_helpers.centroid(initial_flashers)
-        else:
-            centroid = 1.0
         for i in range(int(self.delta_t)):
             if centroid:
-                self.delta_x[i] = centroid
+                k_mean_differences = [np.sqrt((x - centroid[0]) ** 2 + (y - centroid[1]) ** 2) for (x, y, _) in
+                                      initial_flashers]
+                self.delta_x[i] = np.mean(k_mean_differences)
             else:
-                self.delta_x[i] = 1.0
+                self.delta_x[i] = math.sqrt(self.delta_t)
         self.connection_probability = 1 / max(list(self.delta_x.keys()))
 
         phase_zero_fireflies = []
@@ -175,58 +171,44 @@ class Simulation:
                                               'positions': flashers_at_time_t}
 
             if not self.delta_x.get(step):
-                network = nx.Graph()
+                network = nx.DiGraph()
                 # save all the flashers
                 all_flashers = []
                 i_s = []
                 for i, timestep in enumerate(self.distance_statistics.values()):
-                    if step - self.delta_t < i < step:
+                    if step - self.delta_t <= i < step:
                         i_s.append(i)
                         all_flashers.extend(timestep['positions'])
+                    if i > step:
+                        break
                 # randomly wire the network
-                for flash_point in all_flashers:
-                    for flash_point_partner in all_flashers:
-                        if flash_point_partner == flash_point:
-                            continue
-                        else:
-                            if random.random() <= self.connection_probability:
-                                network.add_edge(flash_point[2], flash_point_partner[2])
-                                nx.set_node_attributes(network, values={flash_point[2]:
-                                                                        [flash_point[0], flash_point[1]],
-                                                                        flash_point_partner[2]:
-                                                                        [flash_point_partner[0],
-                                                                        flash_point_partner[1]]
-                                                                        },
-                                                       name="xypositions")
+                for index, flash_point in enumerate(all_flashers):
+                    for flash_point_partner in all_flashers[index+1:]:
+                        a = [flash_point[0], flash_point[1]]
+                        b = [flash_point_partner[0], flash_point_partner[1]]
+                        d = math.sqrt(((a[0] - b[0])**2)+((a[1] - b[1])**2))
+                        if d <= self.delta_x[step - 1]:
+                            network.add_edge(flash_point[2], flash_point_partner[2])
+                            nx.set_node_attributes(network, values={flash_point[2]:
+                                                                    [flash_point[0], flash_point[1]],
+                                                                    flash_point_partner[2]:
+                                                                    [flash_point_partner[0],
+                                                                    flash_point_partner[1]]
+                                                                    },
+                                                    name="xypositions")
 
-                node_indices = (list(network.nodes()))
                 self.networks.append(network)
+                simulation_helpers.bokeh_visualize(network, i_s, self.n)
 
-                x = [network.nodes[node]['xypositions'][0] for node in network.nodes()]
-                y = [network.nodes[node]['xypositions'][1] for node in network.nodes()]
-
-                graph_layout = dict(zip(node_indices, zip(x, y)))
-                print(network.nodes())
-                graph = from_networkx(network, layout_function=graph_layout)
-                graph.layout_provider = StaticLayoutProvider(graph_layout=graph_layout)
-                plot = figure(title='Network embedding, t={}-{}'.format(min(i_s), max(i_s)), x_range=(0, self.n),
-                              y_range=(0, self.n),
-                              tools='', toolbar_location=None)
-                plot.renderers.append(graph)
-
-                output_file('graph.html')
-                show(plot)
-
-                centroid = simulation_helpers.centroid(flashers_at_time_t)
-                if centroid is not None:
-                    k_mean_differences = [np.sqrt((x - centroid[0]) ** 2 + (y - centroid[1]) ** 2) for (x, y, _) in
-                                          flashers_at_time_t]
-                else:
-                    k_mean_differences = 1.0
-                num_keys = max(list(self.delta_x.keys()))
+                # centroid = simulation_helpers.centroid(flashers_at_time_t)
+                # if centroid is not None:
+                #     k_mean_differences = [np.sqrt((x - centroid[0]) ** 2 + (y - centroid[1]) ** 2) for (x, y, _) in
+                #                           flashers_at_time_t]
+                # else:
+                #     k_mean_differences = math.sqrt(self.delta_t)
+                num_keys = max(list(self.delta_x.keys())) + 1
                 for i in range(int(num_keys), int(num_keys + self.delta_t)):
-                    self.delta_x[i] = np.mean(k_mean_differences)
-                print('f')
+                    self.delta_x[i] = math.sqrt(self.delta_t)
 
         self.has_run = True
 

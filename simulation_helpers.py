@@ -1,8 +1,14 @@
+import networkx as nx
 import numpy
 import matplotlib.pyplot as plt
 import math
 import random
 
+from bokeh.io import output_file, show
+from bokeh.models import Ellipse, GraphRenderer, StaticLayoutProvider
+from bokeh.models.graphs import from_networkx
+from bokeh.palettes import Spectral8
+from bokeh.plotting import figure
 
 TSTAR_RANGE = 100
 
@@ -59,3 +65,26 @@ def centroid(points):
         return [centroid_x, centroid_y]
     else:
         return None
+
+
+def bokeh_visualize(network, i_s, side_length):
+    node_indices = (list(network.nodes()))
+
+    x = [network.nodes[node]['xypositions'][0] for node in network.nodes()]
+    y = [network.nodes[node]['xypositions'][1] for node in network.nodes()]
+
+    graph_layout = dict(zip(node_indices, zip(x, y)))
+    graph = from_networkx(network, layout_function=graph_layout)
+    graph.layout_provider = StaticLayoutProvider(graph_layout=graph_layout)
+    plot = figure(title='Network embedding, t={}-{}'.format(min(i_s), max(i_s)), x_range=(0, side_length),
+                  y_range=(0, side_length),
+                  tools='', toolbar_location=None)
+    plot.renderers.append(graph)
+
+    output_file('graph.html')
+    show(plot)
+    # plt.xlim(0, side_length)
+    # plt.ylim(0, side_length)
+    # nx.draw(network, graph_layout)
+    # plt.title('Network embedding, t={}-{}'.format(min(i_s), max(i_s)))
+    # plt.show()

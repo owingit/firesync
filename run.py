@@ -131,7 +131,7 @@ def set_constants():
     num_agent_options = [36]  # , 500, 1000]
     step_count = 1600
     coupling_strengths = [0.03]  # , 0.2, 0.5]
-    num_trials = 1
+    num_trials = 2
     params[PHRASE_DURATIONS] = [190]
     params[BETAS] = [0.1]
     params[TSTARS] = thetastars
@@ -165,11 +165,10 @@ def setup_simulations(params):
                     for beta in params[BETAS]:
                         for phrase_duration in params[PHRASE_DURATIONS]:
                             for trial in range(0, params[TRIALS]):
-                                # if trial % 2 == 0:
-                                #     use_obstacles = True
-                                # else:
-                                #     use_obstacles = False
-                                use_obstacles = False
+                                if trial % 2 == 0:
+                                    use_obstacles = False
+                                else:
+                                    use_obstacles = True
                                 n = params[NS]
                                 step_count = params[STEPS]
                                 simulation = Simulation.Simulation(num_agents=num_agents,
