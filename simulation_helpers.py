@@ -83,8 +83,8 @@ def bokeh_visualize(network, i_s, side_length):
 
     output_file('graph.html')
     show(plot)
-    # plt.xlim(0, side_length)
-    # plt.ylim(0, side_length)
-    # nx.draw(network, graph_layout)
-    # plt.title('Network embedding, t={}-{}'.format(min(i_s), max(i_s)))
-    # plt.show()
+    plt.xlim(0, side_length)
+    plt.ylim(0, side_length)
+    nx.draw(network, graph_layout, node_size=5)
+    plt.title('Network embedding, t={}-{}'.format(min(i_s), max(i_s)))
+    plt.show()

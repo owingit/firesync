@@ -2,6 +2,8 @@ import collections
 import math
 import random
 
+import itertools
+import operator
 import networkx as nx
 import matplotlib
 import matplotlib.pyplot as plt
@@ -9,6 +11,7 @@ import numpy as np
 from matplotlib import animation
 from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import FixedLocator, FixedFormatter
+import sklearn.cluster as skl_cluster
 
 import Firefly
 import obstacle
@@ -67,7 +70,9 @@ class Simulation:
         self.delta_t = 10 * [ff.charging_time + ff.discharging_time for ff in [self.firefly_array[0]]][0]
         self.delta_x = {}
         self.connection_probability = None
-        self.networks = []
+        self.cascade_networks = {}
+        self.indices_in_cascade_ = {}
+        self.networks_in_cascade_ = {}
 
         if self.use_obstacles:
             self.boilerplate = self.boilerplate + '_obstacles'
@@ -169,46 +174,28 @@ class Simulation:
 
             self.distance_statistics[step] = {'length': len(flashers_at_time_t),
                                               'positions': flashers_at_time_t}
+            self.cascade_logic(step)
 
-            if not self.delta_x.get(step):
-                network = nx.DiGraph()
-                # save all the flashers
-                all_flashers = []
-                i_s = []
-                for i, timestep in enumerate(self.distance_statistics.values()):
-                    if step - self.delta_t <= i < step:
-                        i_s.append(i)
-                        all_flashers.extend(timestep['positions'])
-                    if i > step:
-                        break
-                # randomly wire the network
-                for index, flash_point in enumerate(all_flashers):
-                    for flash_point_partner in all_flashers[index+1:]:
-                        a = [flash_point[0], flash_point[1]]
-                        b = [flash_point_partner[0], flash_point_partner[1]]
-                        d = math.sqrt(((a[0] - b[0])**2)+((a[1] - b[1])**2))
-                        if d <= self.delta_x[step - 1]:
-                            network.add_edge(flash_point[2], flash_point_partner[2])
-                            nx.set_node_attributes(network, values={flash_point[2]:
-                                                                    [flash_point[0], flash_point[1]],
-                                                                    flash_point_partner[2]:
-                                                                    [flash_point_partner[0],
-                                                                    flash_point_partner[1]]
-                                                                    },
-                                                    name="xypositions")
+        k = int((self.steps / self.firefly_array[0].phrase_duration) + 1)
 
-                self.networks.append(network)
-                simulation_helpers.bokeh_visualize(network, i_s, self.n)
+        clusters = skl_cluster.KMeans(n_clusters=k, init='k-means++', n_init=10, max_iter=300, tol=0.0001,
+                                      precompute_distances='deprecated', verbose=0, random_state=None, copy_x=True,
+                                      n_jobs='deprecated', algorithm='auto').fit(np.array(list(range(0, k))).reshape(-1,1))
+        print(len(clusters.cluster_centers_))
+        print(self.cascade_networks)
+        num_events = len(list(self.cascade_networks.keys()))
 
-                # centroid = simulation_helpers.centroid(flashers_at_time_t)
-                # if centroid is not None:
-                #     k_mean_differences = [np.sqrt((x - centroid[0]) ** 2 + (y - centroid[1]) ** 2) for (x, y, _) in
-                #                           flashers_at_time_t]
-                # else:
-                #     k_mean_differences = math.sqrt(self.delta_t)
-                num_keys = max(list(self.delta_x.keys())) + 1
-                for i in range(int(num_keys), int(num_keys + self.delta_t)):
-                    self.delta_x[i] = math.sqrt(self.delta_t)
+        for i in range(len(clusters.cluster_centers_)):
+            start = int(0 + (num_events / len(clusters.cluster_centers_) * i))
+            stop = int(0 + num_events / len(clusters.cluster_centers_) * (i + 1))
+            print(list(self.cascade_networks.keys())[start:stop])
+            self.indices_in_cascade_[i] = list(self.cascade_networks.keys())[start:stop]
+        for i, l in self.indices_in_cascade_.items():
+            for index in l:
+                if self.networks_in_cascade_.get(i):
+                    self.networks_in_cascade_[i].append(self.cascade_networks[index])
+                else:
+                    self.networks_in_cascade_[i] = [self.cascade_networks[index]]
 
         self.has_run = True
 
@@ -460,11 +447,11 @@ class Simulation:
                 self.coupling_strength,
                 self.steps,
                 self.r_or_u,
-                now,
+                str(now).replace(' ', '_'),
                 end
             )
         else:
-            save_string = 'data/{}_{}agents_{}x{}_beta={}Tb={}_k={}_steps={}_{}distribution{}{}'.format(
+            save_string = 'data/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}{}'.format(
                 plot_type,
                 self.total_agents,
                 self.n, self.n,
@@ -473,7 +460,7 @@ class Simulation:
                 self.coupling_strength,
                 self.steps,
                 self.r_or_u,
-                now,
+                str(now).replace(' ', '_'),
                 end
             )
         return save_string
@@ -623,3 +610,37 @@ class Simulation:
                 if firefly.flashed_at_this_step[step] is True:
                     to_plot[step] += 1
         return to_plot
+
+    def cascade_logic(self, step):
+        if not self.delta_x.get(step):
+            network = nx.DiGraph()
+            # save all the flashers
+            all_flashers = []
+            i_s = []
+            for i, timestep in enumerate(self.distance_statistics.values()):
+                if step - self.delta_t <= i < step:
+                    i_s.append(i)
+                    all_flashers.extend(timestep['positions'])
+                if i > step:
+                    break
+            # randomly wire the network
+            for index, flash_point in enumerate(all_flashers):
+                for flash_point_partner in all_flashers[index + 1:]:
+                    a = [flash_point[0], flash_point[1]]
+                    b = [flash_point_partner[0], flash_point_partner[1]]
+                    d = math.sqrt(((a[0] - b[0]) ** 2) + ((a[1] - b[1]) ** 2))
+                    if d <= self.delta_x[step - 1]:
+                        network.add_edge(flash_point[2], flash_point_partner[2])
+                        nx.set_node_attributes(network, values={flash_point[2]:
+                                                                    [flash_point[0], flash_point[1]],
+                                                                flash_point_partner[2]:
+                                                                    [flash_point_partner[0],
+                                                                     flash_point_partner[1]]
+                                                                }, name="xypositions")
+            if len(network.nodes()) > 0:
+                self.cascade_networks[step] = [network]
+            # simulation_helpers.bokeh_visualize(network, i_s, self.n)
+
+            num_keys = max(list(self.delta_x.keys())) + 1
+            for i in range(int(num_keys), int(num_keys + self.delta_t)):
+                self.delta_x[i] = math.sqrt(self.delta_t)

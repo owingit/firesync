@@ -1,5 +1,6 @@
 import json
 import math
+import networkx as nx
 import sys
 from datetime import datetime
 
@@ -69,8 +70,25 @@ def write_results(experiment_results, now):
             if experiment.obstacles:
                 dict_to_dump[name][OBSTACLE_KEY] = [(obstacle.centerx, obstacle.centery, obstacle.radius)
                                                     for obstacle in experiment.obstacles]
-            with open("data/raw_experiment_results/{}_experiment_results_{}.json".format(name, now), 'w') as f:
+            with open("data/raw_experiment_results/{}_experiment_results_{}.json".format(name,
+                                                                                         str(now).replace(' ', '_')),
+                      'w') as f:
                 json.dump(dict_to_dump, f)
+            for i, cascade in experiment.networks_in_cascade_.items():
+                for j, network in enumerate(cascade):
+
+                    if experiment.obstacles:
+                        end_folder = '/with_obstacles'
+                    else:
+                        end_folder = '/without_obstacles'
+                    f = str(now).split('-')
+                    s = f[0] + '_' + f[1] + '_' + f[2].split(' ')[0] + '_' + f[2].split(' ')[1].split(':')[0] + \
+                        f[2].split(' ')[1].split(':')[1] + f[2].split(' ')[1].split(':')[2].split('.')[0]
+                    landing_dir = '/{}{}'.format(s, end_folder)
+                    nx.write_gpickle(network,
+                                     'data/raw_experiment_results/{}_results_{}_cascade_{}_network_{}{}.gpickle'.format(
+                                         name, str(now).replace(' ', '_'), i, j, landing_dir
+                                     ))
 
 
 def load_experiment_results(db_file):
@@ -128,8 +146,8 @@ def set_constants():
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
     side_length = 25
-    num_agent_options = [36]  # , 500, 1000]
-    step_count = 1600
+    num_agent_options = [25]  # , 500, 1000]
+    step_count = 3200
     coupling_strengths = [0.03]  # , 0.2, 0.5]
     num_trials = 2
     params[PHRASE_DURATIONS] = [190]
@@ -218,8 +236,8 @@ def plot_animations(experiment_results, now):
             if simulation.use_kuramato:
                 simulation.animate_phase_bins(now, show_gif=False, write_gif=True)
         for simulation in simulation_list:
-            simulation.animate_walk(now, show_gif=True, write_gif=False)
-            simulation.plot_bursts(now, show_gif=True, write_gif=False)
+            simulation.animate_walk(now, show_gif=False, write_gif=True)
+            simulation.plot_bursts(now, show_gif=False, write_gif=True)
 
 
 def compare_obstacles_vs_no_obstacles(experiment_results, now):
@@ -230,8 +248,8 @@ def compare_obstacles_vs_no_obstacles(experiment_results, now):
     num_agents = value.total_agents
     steps = value.steps
     bursts_axis = plt.axes(xlim=(0, steps), ylim=(0, num_agents))
-    show = True
-    write = False
+    show = False
+    write = True
     for identifier, simulation_list in experiment_results.items():
         for simulation in simulation_list:
             if simulation.obstacles:
@@ -245,8 +263,8 @@ def compare_obstacles_vs_no_obstacles(experiment_results, now):
     if show:
         plt.show()
     if write:
-        save_string = value.set_save_string('flashplot', now)
-        save_string = 'combined' + save_string
+        save_string = value.set_save_string('flashplot_combined', now)
+        save_string = save_string
         plt.savefig(save_string)
 
 
