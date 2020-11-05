@@ -73,6 +73,7 @@ class Simulation:
         self.cascade_networks = {}
         self.indices_in_cascade_ = {}
         self.networks_in_cascade_ = {}
+        self.connected_temporal_networks = {}
 
         if self.use_obstacles:
             self.boilerplate = self.boilerplate + '_obstacles'
@@ -176,28 +177,60 @@ class Simulation:
                                               'positions': flashers_at_time_t}
             self.cascade_logic(step)
 
-        k = int((self.steps / self.firefly_array[0].phrase_duration) + 1)
+        self.sort_networks_into_cascades()
+        # for e in self.connected_temporal_networks.keys():
+        #     simulation_helpers._visualize(self.connected_temporal_networks[e], self.indices_in_cascade_[e], self.n)
+        self.has_run = True
+
+    def sort_networks_into_cascades(self):
+        k = int((self.steps / self.firefly_array[0].phrase_duration))
+
+        timesteps_of_flashes = set()
+        for ff in self.firefly_array:
+            flash_steps = [step for step in range(0, self.steps) if ff.flashed_at_this_step[step]]
+            for fs in flash_steps:
+                timesteps_of_flashes.add(fs)
 
         clusters = skl_cluster.KMeans(n_clusters=k, init='k-means++', n_init=10, max_iter=300, tol=0.0001,
                                       precompute_distances='deprecated', verbose=0, random_state=None, copy_x=True,
-                                      n_jobs='deprecated', algorithm='auto').fit(np.array(list(range(0, k))).reshape(-1,1))
-        print(len(clusters.cluster_centers_))
-        print(self.cascade_networks)
-        num_events = len(list(self.cascade_networks.keys()))
+                                      n_jobs='deprecated', algorithm='auto').fit(
+            np.array(sorted(list(timesteps_of_flashes))).reshape(-1, 1))
 
-        for i in range(len(clusters.cluster_centers_)):
-            start = int(0 + (num_events / len(clusters.cluster_centers_) * i))
-            stop = int(0 + num_events / len(clusters.cluster_centers_) * (i + 1))
-            print(list(self.cascade_networks.keys())[start:stop])
-            self.indices_in_cascade_[i] = list(self.cascade_networks.keys())[start:stop]
+        timesteps_in_clusters = []
+        for i in set(clusters.labels_):
+            data_in_clusters = np.array(sorted(list(timesteps_of_flashes))).reshape(-1, 1)[
+                simulation_helpers.cluster_indices(i, clusters.labels_)]
+            timesteps_in_clusters.append([d[0] for d in data_in_clusters])
+
+        sorted_timesteps_in_clusters = sorted(timesteps_in_clusters)
+
+        for i, tmstps in enumerate(sorted_timesteps_in_clusters):
+            self.indices_in_cascade_[i] = tmstps
+        counter = 0
         for i, l in self.indices_in_cascade_.items():
+            if counter != 0:
+                counter += 1
             for index in l:
-                if self.networks_in_cascade_.get(i):
-                    self.networks_in_cascade_[i].append(self.cascade_networks[index])
+                if counter >= len(list(self.cascade_networks.keys())):
+                    counter = list(self.cascade_networks.keys())[-1]
+                cascade_key = list(self.cascade_networks.keys())[counter]
+                if self.cascade_networks.get(index):
+                    if self.networks_in_cascade_.get(i):
+                        self.networks_in_cascade_[i].append(self.cascade_networks[index])
+                    else:
+                        self.networks_in_cascade_[i] = [self.cascade_networks[index]]
+                    counter += 1
+                elif index < cascade_key:
+                    continue
                 else:
-                    self.networks_in_cascade_[i] = [self.cascade_networks[index]]
-
-        self.has_run = True
+                    if self.networks_in_cascade_.get(i):
+                        self.networks_in_cascade_[i].append(self.cascade_networks[cascade_key])
+                    else:
+                        self.networks_in_cascade_[i] = [self.cascade_networks[cascade_key]]
+                    # index is greater, and we skipped over. so add
+                    counter += 1
+            self.connected_temporal_networks[i] = nx.MultiDiGraph(
+                nx.compose_all([graph[0] for graph in self.networks_in_cascade_[i]]))
 
     def integrate_and_fire_interactions(self, step):
         self.update_epsilon_and_readiness(step)
@@ -623,7 +656,7 @@ class Simulation:
                     all_flashers.extend(timestep['positions'])
                 if i > step:
                     break
-            # randomly wire the network
+            # wire the network
             for index, flash_point in enumerate(all_flashers):
                 for flash_point_partner in all_flashers[index + 1:]:
                     a = [flash_point[0], flash_point[1]]
@@ -637,9 +670,12 @@ class Simulation:
                                                                     [flash_point_partner[0],
                                                                      flash_point_partner[1]]
                                                                 }, name="xypositions")
+                        nx.set_edge_attributes(network,
+                                               values=step,
+                                               name="timestep_of_edge")
             if len(network.nodes()) > 0:
                 self.cascade_networks[step] = [network]
-            # simulation_helpers.bokeh_visualize(network, i_s, self.n)
+            # simulation_helpers._visualize(network, i_s, self.n)
 
             num_keys = max(list(self.delta_x.keys())) + 1
             for i in range(int(num_keys), int(num_keys + self.delta_t)):

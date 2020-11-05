@@ -67,7 +67,7 @@ def centroid(points):
         return None
 
 
-def bokeh_visualize(network, i_s, side_length):
+def _visualize(network, i_s, side_length):
     node_indices = (list(network.nodes()))
 
     x = [network.nodes[node]['xypositions'][0] for node in network.nodes()]
@@ -85,6 +85,22 @@ def bokeh_visualize(network, i_s, side_length):
     show(plot)
     plt.xlim(0, side_length)
     plt.ylim(0, side_length)
-    nx.draw(network, graph_layout, node_size=5)
+    d = dict(network.out_degree)
+    node_size = [(v+1) * 20 for v in d.values()]
+
+    edge_attrs = nx.get_edge_attributes(network, 'timestep_of_edge')
+    edge_color_range = list(range(len(list(edge_attrs.values()))))
+    edge_options = {
+        "edge_color": list(edge_color_range),
+        "width": 2,
+        "edge_cmap": plt.cm.cool,
+        "with_labels": False,
+    }
+    nx.draw(network, graph_layout, node_size=node_size, **edge_options)
     plt.title('Network embedding, t={}-{}'.format(min(i_s), max(i_s)))
+
     plt.show()
+
+
+def cluster_indices(label, labels):
+    return numpy.where(labels == label)[0]

@@ -1,6 +1,7 @@
 import json
 import math
 import networkx as nx
+import os
 import sys
 from datetime import datetime
 
@@ -74,21 +75,32 @@ def write_results(experiment_results, now):
                                                                                          str(now).replace(' ', '_')),
                       'w') as f:
                 json.dump(dict_to_dump, f)
+
+            if experiment.obstacles:
+                end_folder = '/with_obstacles'
+            else:
+                end_folder = '/without_obstacles'
+            pickle_folder = "pickled_networks_{}_steps_{}density{}beta{}Tb".format(
+                experiment.steps, (len(experiment.firefly_array) / experiment.n ** 2), experiment.beta,
+                experiment.phrase_duration
+            )
+            f = str(now).split('-')
+            s = f[0] + '_' + f[1] + '_' + f[2].split(' ')[0] + '_' + f[2].split(' ')[1].split(':')[0] + \
+                f[2].split(' ')[1].split(':')[1] + f[2].split(' ')[1].split(':')[2].split('.')[0]
+            landing_dir = '{}{}'.format(s, end_folder)
             for i, cascade in experiment.networks_in_cascade_.items():
                 for j, network in enumerate(cascade):
-
-                    if experiment.obstacles:
-                        end_folder = '/with_obstacles'
-                    else:
-                        end_folder = '/without_obstacles'
-                    f = str(now).split('-')
-                    s = f[0] + '_' + f[1] + '_' + f[2].split(' ')[0] + '_' + f[2].split(' ')[1].split(':')[0] + \
-                        f[2].split(' ')[1].split(':')[1] + f[2].split(' ')[1].split(':')[2].split('.')[0]
-                    landing_dir = '/{}{}'.format(s, end_folder)
+                    if not os.path.exists('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir)):
+                        os.makedirs('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir))
                     nx.write_gpickle(network,
-                                     'data/raw_experiment_results/{}_results_{}_cascade_{}_network_{}{}.gpickle'.format(
-                                         name, str(now).replace(' ', '_'), i, j, landing_dir
+                                     'data/raw_experiment_results/{}/{}/cascade_{}_network_{}.gpickle'.format(
+                                         pickle_folder, landing_dir, i, j
                                      ))
+            for e, accumulated_network in experiment.connected_temporal_networks.items():
+                nx.write_gpickle(accumulated_network,
+                                 'data/raw_experiment_results/{}/{}/accumulated_network_cascade_{}.gpickle'.format(
+                                     pickle_folder, landing_dir, e
+                                 ))
 
 
 def load_experiment_results(db_file):
@@ -257,7 +269,10 @@ def compare_obstacles_vs_no_obstacles(experiment_results, now):
             else:
                 non_obstacle_simulations.append(simulation)
             simulation.plot_bursts(now, show_gif=show, write_gif=write, shared_ax=bursts_axis)
-    assert len(obstacle_simulations) == len(non_obstacle_simulations), 'Need both obstacle and non obstacle sims!'
+    try:
+        assert len(obstacle_simulations) == len(non_obstacle_simulations), 'Need both obstacle and non obstacle sims!'
+    except AssertionError:
+        return
     plt.legend()
     plt.title('Flashes over time ' + value.boilerplate + ' with and without obstacles')
     if show:
