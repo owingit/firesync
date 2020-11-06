@@ -7,6 +7,7 @@ from datetime import datetime
 
 import matplotlib.pyplot as plt
 
+import simulation_plotter as sp
 import Simulation
 import obstacle as ob
 
@@ -46,11 +47,13 @@ def main():
         experiment_results = run_simulations(simulations)
         write_results(experiment_results, now)
 
-    plot_animations(experiment_results, now)
-    compare_obstacles_vs_no_obstacles(experiment_results, now)
+    plotter = sp.Plotter(experiment_results, now, params)
+    plotter.plot_animations()
+    plotter.compare_obstacles_vs_no_obstacles()
+    plotter.plot_quiet_period_distributions()
     print("done")
     if USE_KURAMATO:
-        plot_mean_vector_length_results(params, experiment_results)
+        plotter.plot_mean_vector_length_results()
 
 
 def write_results(experiment_results, now):
@@ -157,11 +160,11 @@ def set_constants():
     params = {}
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
-    side_length = 25
-    num_agent_options = [1, 16]  # , 500, 1000]
-    step_count = 1500
+    side_length = 16
+    num_agent_options = [4] # [1, 4, 9, 16, 25, 64, 100]
+    step_count = 1600
     coupling_strengths = [0.03]  # , 0.2, 0.5]
-    num_trials = 2
+    num_trials = 1
     params[PHRASE_DURATIONS] = ["distribution"]
     params[BETAS] = [0.1]
     params[TSTARS] = thetastars
@@ -195,10 +198,10 @@ def setup_simulations(params):
                     for beta in params[BETAS]:
                         for phrase_duration in params[PHRASE_DURATIONS]:
                             for trial in range(0, params[TRIALS]):
-                                if trial % 2 == 0:
-                                    use_obstacles = False
-                                else:
-                                    use_obstacles = True
+                                # if trial % 2 == 0:
+                                #     use_obstacles = False
+                                # else:
+                                #     use_obstacles = True
                                 n = params[NS]
                                 step_count = params[STEPS]
                                 simulation = Simulation.Simulation(num_agents=num_agents,
@@ -210,7 +213,7 @@ def setup_simulations(params):
                                                                    beta=beta,
                                                                    phrase_duration=phrase_duration,
                                                                    r_or_u="random",
-                                                                   use_obstacles=use_obstacles,
+                                                                   use_obstacles=False,
                                                                    use_kuramato=USE_KURAMATO)
                                 simulations.append(simulation)
     return simulations
@@ -239,77 +242,6 @@ def run_simulations(simulations):
         else:
             experiment_results[result_key] = [simulation]
     return experiment_results
-
-
-def plot_animations(experiment_results, now):
-    """Call a simulation's animation functionality."""
-    for identifier, simulation_list in experiment_results.items():
-        for simulation in simulation_list:
-            if simulation.use_kuramato:
-                simulation.animate_phase_bins(now, show_gif=False, write_gif=True)
-        for simulation in simulation_list:
-            simulation.animate_walk(now, show_gif=False, write_gif=True)
-            simulation.plot_bursts(now, show_gif=False, write_gif=True)
-
-
-def compare_obstacles_vs_no_obstacles(experiment_results, now):
-    """Plot obstacle simulations against no obstacles."""
-    obstacle_simulations = []
-    non_obstacle_simulations = []
-    value = list(experiment_results.values())[0][0]
-    num_agents = value.total_agents
-    steps = value.steps
-    bursts_axis = plt.axes(xlim=(0, steps), ylim=(0, num_agents))
-    show = False
-    write = True
-    for identifier, simulation_list in experiment_results.items():
-        for simulation in simulation_list:
-            if simulation.obstacles:
-                obstacle_simulations.append(simulation)
-            else:
-                non_obstacle_simulations.append(simulation)
-            simulation.plot_bursts(now, show_gif=show, write_gif=write, shared_ax=bursts_axis)
-    try:
-        assert len(obstacle_simulations) == len(non_obstacle_simulations), 'Need both obstacle and non obstacle sims!'
-    except AssertionError:
-        return
-    plt.legend()
-    plt.title('Flashes over time ' + value.boilerplate + ' with and without obstacles')
-    if show:
-        plt.show()
-    if write:
-        save_string = value.set_save_string('flashplot_combined', now)
-        save_string = save_string
-        plt.savefig(save_string)
-
-
-def plot_mean_vector_length_results(params, experiment_results):
-    """Directly plot statistical results from a simulation."""
-    ax = plt.axes(xlim=(0, params[STEPS] + 1), ylim=(0, 1.05))
-    ax.set_xlabel('Step')
-    ax.set_ylabel('Mean resultant vector length')
-    for identifier, simulations in experiment_results.items():
-        _to_plot_obstacles = {key: 0 for key in simulations[0].mean_resultant_vector_length.keys()}
-        _to_plot_no_obstacles = {key: 0 for key in simulations[0].mean_resultant_vector_length.keys()}
-        for instance in simulations:
-            if instance.use_obstacles:
-                label = 'obstacles'
-            else:
-                label = 'no_obstacles'
-            for k, v in instance.mean_resultant_vector_length.items():
-                if label == 'obstacles':
-                    _to_plot_obstacles[k] += v
-                else:
-                    _to_plot_no_obstacles[k] += v
-        divisor = int(len(simulations) / 2)
-        if divisor == 0:
-            divisor = 1
-        _to_plot_no_obstacles = {k: v / divisor for k, v in _to_plot_no_obstacles.items()}
-        _to_plot_obstacles = {k: v / divisor for k, v in _to_plot_obstacles.items()}
-        ax.plot(_to_plot_no_obstacles.keys(), _to_plot_no_obstacles.values(), label='no_obstacles')
-        ax.plot(_to_plot_obstacles.keys(), _to_plot_obstacles.values(), label='obstacles')
-        ax.legend()
-    plt.show()
 
 
 if __name__ == "__main__":
