@@ -5,6 +5,7 @@ import random
 import itertools
 import operator
 import networkx as nx
+import network_sorter
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -183,64 +184,57 @@ class Simulation:
         self.has_run = True
 
     def sort_networks_into_cascades(self):
-        k = int((self.steps / self.firefly_array[0].phrase_duration))
+        if len(self.firefly_array) > 1:
+            sorted_networks = network_sorter.NetworkSort(self.firefly_array, self.steps,
+                                                         self.firefly_array[0].get_phrase_duration())
+            sorted_timesteps_in_clusters = sorted_networks.sorted_timesteps_in_clusters
 
-        timesteps_of_flashes = set()
-        for ff in self.firefly_array:
-            flash_steps = [step for step in range(0, self.steps) if ff.flashed_at_this_step[step]]
-            for fs in flash_steps:
-                timesteps_of_flashes.add(fs)
-
-        clusters = skl_cluster.KMeans(n_clusters=k, init='k-means++', n_init=10, max_iter=300, tol=0.0001,
-                                      precompute_distances='deprecated', verbose=0, random_state=None, copy_x=True,
-                                      n_jobs='deprecated', algorithm='auto').fit(
-            np.array(sorted(list(timesteps_of_flashes))).reshape(-1, 1))
-
-        timesteps_in_clusters = []
-        for i in set(clusters.labels_):
-            data_in_clusters = np.array(sorted(list(timesteps_of_flashes))).reshape(-1, 1)[
-                simulation_helpers.cluster_indices(i, clusters.labels_)]
-            timesteps_in_clusters.append([d[0] for d in data_in_clusters])
-
-        sorted_timesteps_in_clusters = sorted(timesteps_in_clusters)
-
-        for i, tmstps in enumerate(sorted_timesteps_in_clusters):
-            self.indices_in_cascade_[i] = tmstps
-        counter = 0
-        for i, l in self.indices_in_cascade_.items():
-            if counter != 0:
-                counter += 1
-            for index in l:
-                if counter >= len(list(self.cascade_networks.keys())):
-                    counter = list(self.cascade_networks.keys())[-1]
-                cascade_key = list(self.cascade_networks.keys())[counter]
-                if self.cascade_networks.get(index):
-                    if self.networks_in_cascade_.get(i):
-                        self.networks_in_cascade_[i].append(self.cascade_networks[index])
+            for i, tmstps in enumerate(sorted_timesteps_in_clusters):
+                self.indices_in_cascade_[i] = tmstps
+            counter = 0
+            for i, l in self.indices_in_cascade_.items():
+                for index in l:
+                    if counter >= len(list(self.cascade_networks.keys())):
+                        cascade_key = list(self.cascade_networks.keys())[-1]
                     else:
-                        self.networks_in_cascade_[i] = [self.cascade_networks[index]]
-                    counter += 1
-                elif index < cascade_key:
-                    continue
-                else:
-                    if self.networks_in_cascade_.get(i):
-                        self.networks_in_cascade_[i].append(self.cascade_networks[cascade_key])
+                        cascade_key = list(self.cascade_networks.keys())[counter]
+
+                    if self.cascade_networks.get(index):
+                        if self.networks_in_cascade_.get(i):
+                            self.networks_in_cascade_[i].append(self.cascade_networks[index])
+                        else:
+                            self.networks_in_cascade_[i] = [self.cascade_networks[index]]
+                        counter += 1
+                    elif index < cascade_key:
+                        if index == l[-1]:
+                            if self.networks_in_cascade_.get(i):
+                                self.networks_in_cascade_[i].append(self.cascade_networks[cascade_key])
+                            else:
+                                self.networks_in_cascade_[i] = [self.cascade_networks[cascade_key]]
                     else:
-                        self.networks_in_cascade_[i] = [self.cascade_networks[cascade_key]]
-                    # index is greater, and we skipped over. so add
-                    counter += 1
-            self.connected_temporal_networks[i] = nx.MultiDiGraph(
-                nx.compose_all([graph[0] for graph in self.networks_in_cascade_[i]]))
+                        if self.networks_in_cascade_.get(i):
+                            self.networks_in_cascade_[i].append(self.cascade_networks[cascade_key])
+                        else:
+                            self.networks_in_cascade_[i] = [self.cascade_networks[cascade_key]]
+                        # index is greater, and we skipped over. so add
+                        counter += 1
+                if self.networks_in_cascade_.get(i):
+                    self.connected_temporal_networks[i] = nx.MultiDiGraph(
+                        nx.compose_all([graph for graph in self.networks_in_cascade_[i]]))
 
     def integrate_and_fire_interactions(self, step):
         self.update_epsilon_and_readiness(step)
         influential_neighbors = self.update_voltages(step)
+        for ff, neighbor_phrases in influential_neighbors.items():
+            min_phrase = min(neighbor_phrases) if neighbor_phrases else None
+            ff.update_phrase_duration(min_phrase)
 
     def update_voltages(self, step):
         influential_neighbors = {}
         for i in range(0, self.total_agents):
-            influential_neighbors[i] = []
             ff_i = self.firefly_array[i]
+            influential_neighbors[ff_i] = []
+
             dvt = ff_i.set_dvt(step)
 
             int_term = 0
@@ -266,11 +260,11 @@ class Simulation:
                         if skip_dist:
                             continue
                         else:
-                            influential_neighbors[i].append(ff_j.number)
+                            influential_neighbors[ff_i].append(ff_j.phrase_duration)
                             int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
                             env_signal = env_signal + (1 - ff_j.is_charging)
                     else:
-                        influential_neighbors[i].append(ff_j.number)
+                        influential_neighbors[ff_i].append(ff_j.phrase_duration)
                         int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
                         env_signal = env_signal + (1 - ff_j.is_charging)
 
@@ -645,7 +639,7 @@ class Simulation:
         return to_plot
 
     def cascade_logic(self, step):
-        if not self.delta_x.get(step):
+        if step % self.delta_t == 0 and step is not 0:
             network = nx.DiGraph()
             # save all the flashers
             all_flashers = []
@@ -674,7 +668,7 @@ class Simulation:
                                                values=step,
                                                name="timestep_of_edge")
             if len(network.nodes()) > 0:
-                self.cascade_networks[step] = [network]
+                self.cascade_networks[step] = network
             # simulation_helpers._visualize(network, i_s, self.n)
 
             num_keys = max(list(self.delta_x.keys())) + 1

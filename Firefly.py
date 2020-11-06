@@ -61,7 +61,11 @@ class Firefly:
         self.voltage_threshold = 1
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
-        self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
+        if phrase_duration == "distribution":
+            self.phrase_duration = np.random.normal(loc=300, scale=100)
+        else:
+            self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
+
         self.flashes_per_burst = 7  # random.randint(5, 8)
         self.flashes_left_in_current_burst = self.flashes_per_burst
         self.quiet_period = self.phrase_duration - (
@@ -86,6 +90,21 @@ class Firefly:
 
     def unset_ready(self):
         self.ready = False
+
+    def get_phrase_duration(self):
+        return self.phrase_duration
+
+    def update_phrase_duration(self, fastest_phrase=None):
+        if fastest_phrase is None:
+            self.phrase_duration = np.random.normal(loc=300, scale=100)
+        else:
+            self.phrase_duration = fastest_phrase
+        self.update_quiet_period()
+
+    def update_quiet_period(self):
+        self.quiet_period = self.phrase_duration - (
+                 (self.charging_time + self.discharging_time) * self.flashes_per_burst
+        )
 
     def move(self, current_step, obstacles, flip_direction=False):
         """Move a firefly through 2d space using a correlated 2d random walk."""

@@ -75,32 +75,32 @@ def write_results(experiment_results, now):
                                                                                          str(now).replace(' ', '_')),
                       'w') as f:
                 json.dump(dict_to_dump, f)
-
-            if experiment.obstacles:
-                end_folder = '/with_obstacles'
-            else:
-                end_folder = '/without_obstacles'
-            pickle_folder = "pickled_networks_{}_steps_{}density{}beta{}Tb".format(
-                experiment.steps, (len(experiment.firefly_array) / experiment.n ** 2), experiment.beta,
-                experiment.phrase_duration
-            )
-            f = str(now).split('-')
-            s = f[0] + '_' + f[1] + '_' + f[2].split(' ')[0] + '_' + f[2].split(' ')[1].split(':')[0] + \
-                f[2].split(' ')[1].split(':')[1] + f[2].split(' ')[1].split(':')[2].split('.')[0]
-            landing_dir = '{}{}'.format(s, end_folder)
-            for i, cascade in experiment.networks_in_cascade_.items():
-                for j, network in enumerate(cascade):
-                    if not os.path.exists('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir)):
-                        os.makedirs('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir))
-                    nx.write_gpickle(network,
-                                     'data/raw_experiment_results/{}/{}/cascade_{}_network_{}.gpickle'.format(
-                                         pickle_folder, landing_dir, i, j
+            if len(experiment.firefly_array) > 1:
+                if experiment.obstacles:
+                    end_folder = '/with_obstacles'
+                else:
+                    end_folder = '/without_obstacles'
+                pickle_folder = "pickled_networks_{}_steps_{}density{}beta{}Tb".format(
+                    experiment.steps, (len(experiment.firefly_array) / experiment.n ** 2), experiment.beta,
+                    experiment.phrase_duration
+                )
+                f = str(now).split('-')
+                s = f[0] + '_' + f[1] + '_' + f[2].split(' ')[0] + '_' + f[2].split(' ')[1].split(':')[0] + \
+                    f[2].split(' ')[1].split(':')[1] + f[2].split(' ')[1].split(':')[2].split('.')[0]
+                landing_dir = '{}{}'.format(s, end_folder)
+                for i, cascade in experiment.networks_in_cascade_.items():
+                    for j, network in enumerate(cascade):
+                        if not os.path.exists('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir)):
+                            os.makedirs('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir))
+                        nx.write_gpickle(network,
+                                         'data/raw_experiment_results/{}/{}/cascade_{}_network_{}.gpickle'.format(
+                                             pickle_folder, landing_dir, i, j
+                                         ))
+                for e, accumulated_network in experiment.connected_temporal_networks.items():
+                    nx.write_gpickle(accumulated_network,
+                                     'data/raw_experiment_results/{}/{}/accumulated_network_cascade_{}.gpickle'.format(
+                                         pickle_folder, landing_dir, e
                                      ))
-            for e, accumulated_network in experiment.connected_temporal_networks.items():
-                nx.write_gpickle(accumulated_network,
-                                 'data/raw_experiment_results/{}/{}/accumulated_network_cascade_{}.gpickle'.format(
-                                     pickle_folder, landing_dir, e
-                                 ))
 
 
 def load_experiment_results(db_file):
@@ -158,11 +158,11 @@ def set_constants():
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
     side_length = 25
-    num_agent_options = [25]  # , 500, 1000]
-    step_count = 3200
+    num_agent_options = [1, 16]  # , 500, 1000]
+    step_count = 1500
     coupling_strengths = [0.03]  # , 0.2, 0.5]
     num_trials = 2
-    params[PHRASE_DURATIONS] = [190]
+    params[PHRASE_DURATIONS] = ["distribution"]
     params[BETAS] = [0.1]
     params[TSTARS] = thetastars
     params[TBS] = inter_burst_intervals
