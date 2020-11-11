@@ -36,26 +36,37 @@ class Plotter:
             ax.set_xlabel('Interburst interval')
             ax.set_ylabel('Freq distribution')
             for identifier, results in d.items():
+                identifier_data = {}
                 for simulation_agent_count, iid_list in results.items():
-                    means = []
-                    overall_std_list = []
                     for iid in iid_list:
-                        means.append(np.mean(iid))
-                        overall_std_list.append(np.std(iid))
+                        if not identifier_data.get(simulation_agent_count):
+                            identifier_data[simulation_agent_count] = [(np.mean(iid), np.std(iid))]
+                        else:
+                            identifier_data[simulation_agent_count].append((np.mean(iid), np.std(iid)))
 
+                for simulation_agent_count, data in identifier_data.items():
+                    means = [datum[0] for datum in data]
+                    stds = [datum[1] for datum in data]
                     overall_mean = sum(means) / len(means)
-                    overall_std = sum(overall_std_list) / len(overall_std_list)
+                    overall_std = sum(stds) / len(stds)
                     dist = norm(overall_mean, overall_std)
-                    values = [value for value in
-                              range(int(overall_mean - (3 * overall_std)), int(overall_mean + (3 * overall_std)))]
+                    values = [value for value in range(int(overall_mean - (3 * overall_std)), int(overall_mean + (3 * overall_std)))]
                     probabilities = [dist.pdf(value) for value in values]
                     ax.plot(values, probabilities, label=str(simulation_agent_count)+'_pdf')
 
             plt.legend()
+
+            trials = len(list(d.keys()))
             if i == 0:
-                string = 'Individual'
+                if trials > 1:
+                    string = 'Individual_avg_over_' + str(trials)
+                else:
+                    string = 'Individual_avg'
             else:
-                string = 'Swarm'
+                if trials > 1:
+                    string = 'Swarm_avg_over_' + str(trials)
+                else:
+                    string = 'Swarm_avg'
             plt.title('{}_interburst_distributions_{}steps_{}'.format(string, self.params["steps"],
                                                                       self.params["phrases"]))
             plt.savefig('{}_interburst_distributions_{}steps_{}.png'.format(string, self.params["steps"],
