@@ -632,6 +632,67 @@ class Simulation:
 
         return np.array(r)
 
+    def calc_interburst_distribution(self):
+        """Calculate the distribution of interburst intervals for all individuals in a simulation.
+
+        :returns: Flat list of interburst distributions
+        """
+        starts_of_bursts = {}
+        for firefly in self.firefly_array:
+            starts_of_bursts[firefly.number] = []
+            flashes = firefly.flashes_per_burst
+            for i, yes in enumerate(firefly.flashed_at_this_step):
+                if yes and flashes == firefly.flashes_per_burst:
+                    starts_of_bursts[firefly.number].append(i)
+                    flashes -= 1
+                else:
+                    if yes:
+                        flashes -= 1
+                        if flashes == 0:
+                            flashes = firefly.flashes_per_burst
+
+        interburst_distribution = [[starts_of_bursts[a][i+1] - starts_of_bursts[a][i]
+                                   for i in range(len(starts_of_bursts[a])-1)]
+                                   for a in starts_of_bursts.keys()]
+        flat_interburst_distribution = [item for sublist in interburst_distribution for item in sublist]
+
+        return flat_interburst_distribution
+
+    def swarm_interburst_dist(self):
+        """Calculate the distribution of interburst intervals for the collective bursting events.
+
+        :returns: Flat list of interburst distributions
+        """
+        starts_of_bursts = {}
+        for firefly in self.firefly_array:
+            starts_of_bursts[firefly.number] = []
+            flashes = firefly.flashes_per_burst
+            for i, yes in enumerate(firefly.flashed_at_this_step):
+                if yes and flashes == firefly.flashes_per_burst:
+                    starts_of_bursts[firefly.number].append(i)
+                    flashes -= 1
+                else:
+                    if yes:
+                        flashes -= 1
+                        if flashes == 0:
+                            flashes = firefly.flashes_per_burst
+        print(starts_of_bursts)
+        longest_list = max(list(starts_of_bursts.values()), key=lambda l: len(l))
+        number_of_bursts = len(longest_list)
+
+        # pad shorties
+        for k, burst in starts_of_bursts.items():
+            if len(burst) < number_of_bursts:
+                starts_of_bursts[k].extend([float("inf")] * (number_of_bursts - len(burst)))
+
+        collective_burst_starts = []
+        for index in range(0, number_of_bursts):
+            starting_points = [burst[index] for burst in list(starts_of_bursts.values())]
+            collective_burst_starts.append(min(starting_points))
+        collective_interburst_distribution = [collective_burst_starts[i+1] - collective_burst_starts[i]
+                                              for i in range(len(collective_burst_starts)-1)]
+        return collective_interburst_distribution
+
     def get_burst_data(self):
         to_plot = {i: 0 for i in range(self.steps)}
         for step in range(self.steps):

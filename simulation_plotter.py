@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import norm
 
 
 class Plotter:
@@ -8,8 +10,57 @@ class Plotter:
         self.params = params
 
     def plot_quiet_period_distributions(self):
-        # TODO
-        print(self.experiment_results.items())
+        interburst_interval_distribution = {}
+        swarm_interburst_interval_distribution = {}
+        for identifier, simulation_list in self.experiment_results.items():
+            interburst_interval_distribution[identifier] = {}
+            swarm_interburst_interval_distribution[identifier] = {}
+            for simulation in simulation_list:
+                k = simulation.total_agents
+                if not interburst_interval_distribution.get(k):
+                    interburst_interval_distribution[identifier][k] = [simulation.calc_interburst_distribution()]
+                else:
+                    interburst_interval_distribution[identifier][k].append(simulation.calc_interburst_distribution())
+
+                if not swarm_interburst_interval_distribution.get(k):
+                    swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist()]
+                else:
+                    swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
+
+        self._plot_distributions(interburst_interval_distribution, swarm_interburst_interval_distribution)
+
+    def _plot_distributions(self, individual, group):
+        dicts = [individual, group]
+        for i, d in enumerate(dicts):
+            fig, ax = plt.subplots()
+            ax.set_xlabel('Interburst interval')
+            ax.set_ylabel('Freq distribution')
+            for identifier, results in d.items():
+                for simulation_agent_count, iid_list in results.items():
+                    means = []
+                    overall_std_list = []
+                    for iid in iid_list:
+                        means.append(np.mean(iid))
+                        overall_std_list.append(np.std(iid))
+
+                    overall_mean = sum(means) / len(means)
+                    overall_std = sum(overall_std_list) / len(overall_std_list)
+                    dist = norm(overall_mean, overall_std)
+                    values = [value for value in
+                              range(int(overall_mean - (3 * overall_std)), int(overall_mean + (3 * overall_std)))]
+                    probabilities = [dist.pdf(value) for value in values]
+                    ax.plot(values, probabilities, label=str(simulation_agent_count)+'_pdf')
+
+            plt.legend()
+            if i == 0:
+                string = 'Individual'
+            else:
+                string = 'Swarm'
+            plt.title('{}_interburst_distributions_{}steps_{}'.format(string, self.params["steps"],
+                                                                      self.params["phrases"]))
+            plt.savefig('{}_interburst_distributions_{}steps_{}.png'.format(string, self.params["steps"],
+                                                                            self.params["phrases"]))
+            plt.clf()
 
     def plot_animations(self):
         """Call a simulation's animation functionality."""

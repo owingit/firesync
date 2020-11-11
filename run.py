@@ -49,7 +49,7 @@ def main():
 
     plotter = sp.Plotter(experiment_results, now, params)
     plotter.plot_animations()
-    plotter.compare_obstacles_vs_no_obstacles()
+    # plotter.compare_obstacles_vs_no_obstacles()
     plotter.plot_quiet_period_distributions()
     print("done")
     if USE_KURAMATO:
@@ -119,7 +119,9 @@ def process_results_from_file(raw_experiment_results, params, if_obstacles, if_k
     num_agents = len(list(raw_experiment_results[name].get(TRACE_KEY)))
     num_steps = len(list(raw_experiment_results[name].get(TRACE_KEY)[0].keys()))
     beta = float(name.split('beta')[0].split('density')[1])
-    phrase_duration = int(name.split('beta')[1].split('Tb')[0])
+    phrase_duration = name.split('beta')[1].split('Tb')[0]
+    if phrase_duration != 'distribution':
+        phrase_duration = int(phrase_duration)
     dummy_simulation = Simulation.Simulation(num_agents=num_agents,
                                              side_length=params[NS], step_count=num_steps, thetastar=math.pi * 2,
                                              coupling_strength=0.03,
@@ -150,7 +152,7 @@ def process_results_from_file(raw_experiment_results, params, if_obstacles, if_k
     else:
         result_key = frozenset((dummy_simulation.beta,
                                 dummy_simulation.phrase_duration,
-                                dummy_simulation.total_agents,
+                                str(dummy_simulation.total_agents),
                                 dummy_simulation.n,
                                 if_obstacles))
     return {result_key: [dummy_simulation]}
@@ -161,8 +163,8 @@ def set_constants():
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
     side_length = 16
-    num_agent_options = [4] # [1, 4, 9, 16, 25, 64, 100]
-    step_count = 1600
+    num_agent_options = [1, 4, 9, 16, 25, 64, 100]
+    step_count = 800
     coupling_strengths = [0.03]  # , 0.2, 0.5]
     num_trials = 1
     params[PHRASE_DURATIONS] = ["distribution"]
@@ -213,7 +215,7 @@ def setup_simulations(params):
                                                                    beta=beta,
                                                                    phrase_duration=phrase_duration,
                                                                    r_or_u="random",
-                                                                   use_obstacles=False,
+                                                                   use_obstacles=True,
                                                                    use_kuramato=USE_KURAMATO)
                                 simulations.append(simulation)
     return simulations

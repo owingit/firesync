@@ -62,7 +62,7 @@ class Firefly:
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
         if phrase_duration == "distribution":
-            self.phrase_duration = np.random.normal(loc=300, scale=100)
+            self.phrase_duration = np.random.normal(loc=250, scale=50)
         else:
             self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
 
@@ -96,7 +96,7 @@ class Firefly:
 
     def update_phrase_duration(self, fastest_phrase=None):
         if fastest_phrase is None:
-            self.phrase_duration = np.random.normal(loc=300, scale=100)
+            self.phrase_duration = np.random.normal(loc=250, scale=50)
         else:
             self.phrase_duration = fastest_phrase
         self.update_quiet_period()
