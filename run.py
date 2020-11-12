@@ -164,9 +164,9 @@ def set_constants():
     inter_burst_intervals = [1.57]  # radians / sec
     side_length = 16
     num_agent_options = [1, 4, 9, 16, 25, 64, 100]
-    step_count = 800
+    step_count = 3200
     coupling_strengths = [0.03]  # , 0.2, 0.5]
-    num_trials = 1
+    num_trials = 5
     params[PHRASE_DURATIONS] = ["distribution"]
     params[BETAS] = [0.1]
     params[TSTARS] = thetastars
