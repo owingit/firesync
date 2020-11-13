@@ -4,10 +4,11 @@ from scipy.stats import norm
 
 
 class Plotter:
-    def __init__(self, experiment_results, now, params):
+    def __init__(self, experiment_results, now):
         self.experiment_results = experiment_results
         self.now = now
-        self.params = params
+        name = list(self.experiment_results.keys())[0]
+        self.step_count = self.experiment_results[name][0].step_count
 
     def plot_quiet_period_distributions(self):
         interburst_interval_distribution = {}
@@ -67,10 +68,10 @@ class Plotter:
                     string = 'Swarm_avg_over_' + str(trials)
                 else:
                     string = 'Swarm_avg'
-            plt.title('{}_interburst_distributions_{}steps_{}'.format(string, self.params["steps"],
-                                                                      self.params["phrases"]))
-            plt.savefig('{}_interburst_distributions_{}steps_{}.png'.format(string, self.params["steps"],
-                                                                            self.params["phrases"]))
+            plt.title('{}_interburst_distributions_{}steps_{}'.format(string, self.step_count,
+                                                                      "distribution"))
+            plt.savefig('{}_interburst_distributions_{}steps_{}.png'.format(string, self.step_count,
+                                                                            "distribution"))
             plt.clf()
 
     def plot_animations(self):
@@ -89,7 +90,7 @@ class Plotter:
         non_obstacle_simulations = []
         value = list(self.experiment_results.values())[0][0]
         num_agents = value.total_agents
-        steps = value.steps
+        steps = self.step_count
         bursts_axis = plt.axes(xlim=(0, steps), ylim=(0, num_agents))
         show = False
         write = True
@@ -115,7 +116,7 @@ class Plotter:
 
     def plot_mean_vector_length_results(self):
         """Directly plot statistical results from a simulation."""
-        ax = plt.axes(xlim=(0, self.params["steps"] + 1), ylim=(0, 1.05))
+        ax = plt.axes(xlim=(0, self.step_count + 1), ylim=(0, 1.05))
         ax.set_xlabel('Step')
         ax.set_ylabel('Mean resultant vector length')
         for identifier, simulations in self.experiment_results.items():

@@ -7,7 +7,7 @@ from datetime import datetime
 
 import multiprocessing as multip
 from pathos.multiprocessing import ProcessingPool as Pool
-
+import argparse
 
 import simulation_plotter as sp
 import Simulation
@@ -21,6 +21,7 @@ STEPS = "steps"
 KS = "k"
 TRIALS = "trials"
 BETAS = "betas"
+DBS = "databases"
 PHRASE_DURATIONS = "phrases"
 
 PHASE_KEY = 'all_phases'
@@ -31,25 +32,46 @@ OBSTACLE_KEY = 'obstacles'
 DISTANCE_KEY = 'distances'
 
 USE_KURAMATO = False
+DUMP_DATA = True
 
 
 def main():
-    params = set_constants()
     now = datetime.now()
     experiment_results = {}
-    if len(sys.argv) > 1:
+
+    # can pass 1 or more db files without specifying any other arguments
+    if len(sys.argv) > 1 and "-n" not in sys.argv:
         for db in sys.argv[1:]:
             obstacle_flag = False
             if 'obstacles' in db:
                 obstacle_flag = True
             raw_experiment_results = load_experiment_results(db)
-            experiment_results.update(process_results_from_file(raw_experiment_results, params, obstacle_flag))
-    else:
+            experiment_results.update(process_results_from_file(raw_experiment_results, obstacle_flag))
+
+    # can also pass multiple arguments to run new simulations (agent count, side len, simulation len, trials)
+    elif len(sys.argv) > 1:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--num", "-n", type=int, nargs='+', required=True)
+        parser.add_argument("--steps", "-s", type=int, required=True)
+        parser.add_argument("--length", "-l", type=int, required=True)
+        parser.add_argument("--trials", "-t", type=int, required=True)
+        args = parser.parse_args()
+        num_list = [int(num) for num in args.num]
+        params = set_constants(nao=num_list, sc=args.steps, sl=args.length, nt=args.trials)
         simulations = setup_simulations(params)
         experiment_results = run_simulations(simulations, use_processes=True)
-        write_results(experiment_results, now)
+        if DUMP_DATA:
+            write_results(experiment_results, now)
 
-    plotter = sp.Plotter(experiment_results, now, params)
+    # or run the default settings
+    else:
+        params = set_constants()
+        simulations = setup_simulations(params)
+        experiment_results = run_simulations(simulations, use_processes=True)
+        if DUMP_DATA:
+            write_results(experiment_results, now)
+
+    plotter = sp.Plotter(experiment_results, now)
     plotter.plot_animations()
     # plotter.compare_obstacles_vs_no_obstacles()
     plotter.plot_quiet_period_distributions()
@@ -114,16 +136,18 @@ def load_experiment_results(db_file):
     return json_dict
 
 
-def process_results_from_file(raw_experiment_results, params, if_obstacles, if_kuramato=USE_KURAMATO):
+def process_results_from_file(raw_experiment_results, if_obstacles, if_kuramato=USE_KURAMATO):
     name = list(raw_experiment_results.keys())[0]
     num_agents = len(list(raw_experiment_results[name].get(TRACE_KEY)))
     num_steps = len(list(raw_experiment_results[name].get(TRACE_KEY)[0].keys()))
     beta = float(name.split('beta')[0].split('density')[1])
+    density = float(name.split('beta')[0].split('density')[0])
+    side_length = math.sqrt((float(num_agents)) / density)
     phrase_duration = name.split('beta')[1].split('Tb')[0]
     if phrase_duration != 'distribution':
         phrase_duration = int(phrase_duration)
     dummy_simulation = Simulation.Simulation(num_agents=num_agents,
-                                             side_length=params[NS], step_count=num_steps, thetastar=math.pi * 2,
+                                             side_length=side_length, step_count=num_steps, thetastar=math.pi * 2,
                                              coupling_strength=0.03,
                                              Tb=1.57,
                                              beta=beta, phrase_duration=phrase_duration, r_or_u="uniform",
@@ -158,15 +182,27 @@ def process_results_from_file(raw_experiment_results, params, if_obstacles, if_k
     return {result_key: [dummy_simulation]}
 
 
-def set_constants():
+def set_constants(sl=None, sc=None, nao=None, nt=None):
+    if not sl:
+        side_length = 16
+    else:
+        side_length = sl
+    if not nao:
+        num_agent_options = [1, 4, 9, 16, 25, 64, 100]
+    else:
+        num_agent_options = nao
+    if not sc:
+        step_count = 3200
+    else:
+        step_count = sc
+    if not nt:
+        num_trials = 5
+    else:
+        num_trials = nt
     params = {}
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
-    side_length = 16
-    num_agent_options = [1, 4, 9, 16, 25, 64, 100]
-    step_count = 3200
     coupling_strengths = [0.03]  # , 0.2, 0.5]
-    num_trials = 5
     params[PHRASE_DURATIONS] = ["distribution"]
     params[BETAS] = [0.1]
     params[TSTARS] = thetastars
@@ -265,7 +301,6 @@ def run_simulations(simulations, use_processes=True):
                 experiment_results[result_key] = [simulation]
 
     return experiment_results
-
 
 
 def run_simulation_in_process(simulation):
