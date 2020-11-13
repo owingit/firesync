@@ -30,7 +30,6 @@ def test_initial_coordinates():
     total = 150
     side_length = 15
     for i in range(0, total):
-        print(get_uniform_coordinates(i, side_length, total)[0], get_uniform_coordinates(i, side_length, total)[1])
         plt.scatter(get_uniform_coordinates(i, side_length, total)[0],
                     get_uniform_coordinates(i, side_length, total)[1])
     plt.show()

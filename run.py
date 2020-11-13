@@ -5,7 +5,9 @@ import os
 import sys
 from datetime import datetime
 
-import matplotlib.pyplot as plt
+import multiprocessing as multip
+from pathos.multiprocessing import ProcessingPool as Pool
+
 
 import simulation_plotter as sp
 import Simulation
@@ -44,7 +46,7 @@ def main():
             experiment_results.update(process_results_from_file(raw_experiment_results, params, obstacle_flag))
     else:
         simulations = setup_simulations(params)
-        experiment_results = run_simulations(simulations)
+        experiment_results = run_simulations(simulations, use_processes=True)
         write_results(experiment_results, now)
 
     plotter = sp.Plotter(experiment_results, now, params)
@@ -109,12 +111,10 @@ def write_results(experiment_results, now):
 def load_experiment_results(db_file):
     with open(db_file, 'rb+') as data:
         json_dict = json.load(data)
-        print(json_dict)
     return json_dict
 
 
 def process_results_from_file(raw_experiment_results, params, if_obstacles, if_kuramato=USE_KURAMATO):
-    print(raw_experiment_results)
     name = list(raw_experiment_results.keys())[0]
     num_agents = len(list(raw_experiment_results[name].get(TRACE_KEY)))
     num_steps = len(list(raw_experiment_results[name].get(TRACE_KEY)[0].keys()))
@@ -221,29 +221,55 @@ def setup_simulations(params):
     return simulations
 
 
-def run_simulations(simulations):
+def run_simulations(simulations, use_processes=True):
     """
     Run all simulations set up by setup_simulations.
     The results are stored in a dictionary keyed by their parameters.
     """
     experiment_results = {}
-    for count, simulation in enumerate(simulations):
-        simulation.run()
-        if simulation.use_kuramato:
-            result_key = frozenset((simulation.tstar_seed,
-                                    simulation.Tb,
-                                    simulation.total_agents,
-                                    simulation.coupling_strength))
-        else:
-            result_key = frozenset((simulation.beta,
-                                    simulation.phrase_duration,
-                                    simulation.total_agents,
-                                    simulation.n))
-        if experiment_results.get(result_key):
-            experiment_results[result_key].append(simulation)
-        else:
-            experiment_results[result_key] = [simulation]
+    if use_processes:
+        process_pool = Pool(multip.cpu_count())
+        process_results = process_pool.map(run_simulation_in_process, simulations)
+
+        for finished_simulation in process_results:
+            if finished_simulation.use_kuramato:
+                result_key = frozenset((finished_simulation.tstar_seed,
+                                        finished_simulation.Tb,
+                                        finished_simulation.total_agents,
+                                        finished_simulation.coupling_strength))
+            else:
+                result_key = frozenset((finished_simulation.beta,
+                                        finished_simulation.phrase_duration,
+                                        finished_simulation.total_agents,
+                                        finished_simulation.n))
+            if experiment_results.get(result_key):
+                experiment_results[result_key].append(finished_simulation)
+            else:
+                experiment_results[result_key] = [finished_simulation]
+
+    else:
+        for simulation in simulations:
+            if simulation.use_kuramato:
+                result_key = frozenset((simulation.tstar_seed,
+                                        simulation.Tb,
+                                        simulation.total_agents,
+                                        simulation.coupling_strength))
+            else:
+                result_key = frozenset((simulation.beta,
+                                        simulation.phrase_duration,
+                                        simulation.total_agents,
+                                        simulation.n))
+            if experiment_results.get(result_key):
+                experiment_results[result_key].append(simulation)
+            else:
+                experiment_results[result_key] = [simulation]
+
     return experiment_results
+
+
+
+def run_simulation_in_process(simulation):
+    simulation.run()
 
 
 if __name__ == "__main__":

@@ -140,8 +140,10 @@ class Simulation:
         experiences phase interactions, either by slightly modified Kuramato model interactions or
         TODO: integrate and fire reactions.
         """
+        logging = False
         for step in range(1, self.steps):
-            print(step)
+            if logging:
+                print(step)
             for firefly in self.firefly_array:
                 firefly.move(step, self.obstacles)
             if self.use_kuramato:
@@ -676,7 +678,6 @@ class Simulation:
                         flashes -= 1
                         if flashes == 0:
                             flashes = firefly.flashes_per_burst
-        print(starts_of_bursts)
         longest_list = max(list(starts_of_bursts.values()), key=lambda l: len(l))
         number_of_bursts = len(longest_list)
 
