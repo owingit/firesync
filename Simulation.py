@@ -116,23 +116,24 @@ class Simulation:
                 self.delta_x[i] = math.sqrt(self.delta_t)
         self.connection_probability = 1 / max(list(self.delta_x.keys()))
 
-        phase_zero_fireflies = []
-        for firefly in self.firefly_array:
-            phase_in_degrees = int(math.degrees(firefly.phase[0]))
-            if phase_in_degrees < 0:
-                phase_in_degrees += 360
-            if 0 <= phase_in_degrees < 1 or 359 < phase_in_degrees <= 360:
-                phase_zero_fireflies.append(firefly)
-            self.num_fireflies_with_phase_x[0][phase_in_degrees] += 1
+        if self.use_kuramato:
+            phase_zero_fireflies = []
+            for firefly in self.firefly_array:
+                phase_in_degrees = int(math.degrees(firefly.phase[0]))
+                if phase_in_degrees < 0:
+                    phase_in_degrees += 360
+                if 0 <= phase_in_degrees < 1 or 359 < phase_in_degrees <= 360:
+                    phase_zero_fireflies.append(firefly)
+                self.num_fireflies_with_phase_x[0][phase_in_degrees] += 1
 
-        if phase_zero_fireflies:
-            phase_zero_fit = np.polyfit([ff.positionx[0] for ff in phase_zero_fireflies],
-                                        [ff.positiony[0] for ff in phase_zero_fireflies],
-                                        1)
-        else:
-            phase_zero_fit = [0, 0]
-        self.wave_statistics[0]['count'] = len(phase_zero_fireflies)
-        self.wave_statistics[0]['regression'] = phase_zero_fit
+            if phase_zero_fireflies:
+                phase_zero_fit = np.polyfit([ff.positionx[0] for ff in phase_zero_fireflies],
+                                            [ff.positiony[0] for ff in phase_zero_fireflies],
+                                            1)
+            else:
+                phase_zero_fit = [0, 0]
+            self.wave_statistics[0]['count'] = len(phase_zero_fireflies)
+            self.wave_statistics[0]['regression'] = phase_zero_fit
 
     def run(self):
         """
@@ -148,30 +149,26 @@ class Simulation:
                 firefly.move(step, self.obstacles)
             if self.use_kuramato:
                 self.kuramato_phase_interactions(step)
+                phase_zero_fireflies = [ff
+                                        for ff in self.firefly_array
+                                        if 0 <= ff.phase[step] < 1 or 359 < ff.phase[step] <= 360
+                                        # or ((ff.phase[step-1] + ff.phase[step] - 2 * (360 - ff.phase[step-1])) % 360 <= math.degrees(self.Tb))
+                                        ]
+                if phase_zero_fireflies:
+                    phase_zero_fit = np.polyfit(
+                        [ff.positionx[step] for ff in phase_zero_fireflies],
+                        [ff.positiony[step] for ff in phase_zero_fireflies],
+                        1)
+                else:
+                    phase_zero_fit = self.wave_statistics[step - 1]['regression']
+                self.wave_statistics[step]['count'] = len(phase_zero_fireflies)
+                self.wave_statistics[step]['regression'] = phase_zero_fit
+                ff_phases = [ff.phase[step] for ff in self.firefly_array]
+                mean_resultant_vector_length = self.circ_r(np.array(ff_phases))
+                self.mean_resultant_vector_length[step] = float(mean_resultant_vector_length)
+
             if self.use_integrate_and_fire:
                 self.integrate_and_fire_interactions(step)
-            phase_zero_fireflies = [ff
-                                    for ff in self.firefly_array
-                                    if 0 <= ff.phase[step] < 1 or 359 < ff.phase[step] <= 360
-                                    # or ((ff.phase[step-1] + ff.phase[step] - 2 * (360 - ff.phase[step-1])) % 360 <= math.degrees(self.Tb))
-                                    ]
-            if phase_zero_fireflies:
-                phase_zero_fit = np.polyfit(
-                    [ff.positionx[step] for ff in phase_zero_fireflies],
-                    [ff.positiony[step] for ff in phase_zero_fireflies],
-                    1)
-            else:
-                phase_zero_fit = self.wave_statistics[step-1]['regression']
-            self.wave_statistics[step]['count'] = len(phase_zero_fireflies)
-            self.wave_statistics[step]['regression'] = phase_zero_fit
-            ff_phases = [ff.phase[step] for ff in self.firefly_array]
-            if self.use_kuramato:
-                mean_resultant_vector_length = self.circ_r(np.array(ff_phases))
-            else:
-                # ToDO: better metric
-                mean_resultant_vector_length = self.circ_r(np.array(
-                    [ff.voltage_instantaneous[step] * 2*math.pi for ff in self.firefly_array]))
-            self.mean_resultant_vector_length[step] = float(mean_resultant_vector_length)
 
             flashers_at_time_t = [(ff.positionx[step], ff.positiony[step], ff.number)
                                   for ff in self.firefly_array if ff.flashed_at_this_step[step]]
@@ -180,7 +177,7 @@ class Simulation:
                                               'positions': flashers_at_time_t}
             self.cascade_logic(step)
 
-        self.sort_networks_into_cascades()
+        # self.sort_networks_into_cascades()
         # for e in self.connected_temporal_networks.keys():
         #     simulation_helpers._visualize(self.connected_temporal_networks[e], self.indices_in_cascade_[e], self.n)
         self.has_run = True

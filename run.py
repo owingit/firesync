@@ -3,10 +3,11 @@ import math
 import networkx as nx
 import os
 import sys
+import csv
 from datetime import datetime
 
-import multiprocessing as multip
-from pathos.multiprocessing import ProcessingPool as Pool
+import multiprocessing
+import pathos.multiprocessing as multip
 import argparse
 
 import simulation_plotter as sp
@@ -46,7 +47,10 @@ def main():
             if 'obstacles' in db:
                 obstacle_flag = True
             raw_experiment_results = load_experiment_results(db)
-            experiment_results.update(process_results_from_file(raw_experiment_results, obstacle_flag))
+            if raw_experiment_results:
+                experiment_results.update(process_results_from_written_file(raw_experiment_results, obstacle_flag))
+            else:
+                raise TypeError("json data expected!")
 
     # can also pass multiple arguments to run new simulations (agent count, side len, simulation len, trials)
     elif len(sys.argv) > 1:
@@ -131,12 +135,16 @@ def write_results(experiment_results, now):
 
 
 def load_experiment_results(db_file):
-    with open(db_file, 'rb+') as data:
-        json_dict = json.load(data)
-    return json_dict
+    if '.json' in db_file:
+        with open(db_file, 'rb+') as data:
+            json_dict = json.load(data)
+        return json_dict
+    else:
+        print('Experiment results must be in .json format!')
+        return None
 
 
-def process_results_from_file(raw_experiment_results, if_obstacles, if_kuramato=USE_KURAMATO):
+def process_results_from_written_file(raw_experiment_results, if_obstacles, if_kuramato=USE_KURAMATO):
     name = list(raw_experiment_results.keys())[0]
     num_agents = len(list(raw_experiment_results[name].get(TRACE_KEY)))
     num_steps = len(list(raw_experiment_results[name].get(TRACE_KEY)[0].keys()))
@@ -146,6 +154,7 @@ def process_results_from_file(raw_experiment_results, if_obstacles, if_kuramato=
     phrase_duration = name.split('beta')[1].split('Tb')[0]
     if phrase_duration != 'distribution':
         phrase_duration = int(phrase_duration)
+
     dummy_simulation = Simulation.Simulation(num_agents=num_agents,
                                              side_length=side_length, step_count=num_steps, thetastar=math.pi * 2,
                                              coupling_strength=0.03,
@@ -264,7 +273,7 @@ def run_simulations(simulations, use_processes=True):
     """
     experiment_results = {}
     if use_processes:
-        process_pool = Pool(multip.cpu_count())
+        process_pool = multip.ProcessingPool(multip.cpu_count())
         process_results = process_pool.map(run_simulation_in_process, simulations)
 
         for finished_simulation in process_results:
@@ -304,7 +313,10 @@ def run_simulations(simulations, use_processes=True):
 
 
 def run_simulation_in_process(simulation):
+    current = multiprocessing.current_process()
+    print('running:', current.name, 'with {} agents'.format(simulation.total_agents))
     simulation.run()
+    return simulation
 
 
 if __name__ == "__main__":
