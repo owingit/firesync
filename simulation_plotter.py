@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import numpy as np
 from scipy.stats import norm
 
@@ -8,7 +9,7 @@ class Plotter:
         self.experiment_results = experiment_results
         self.now = now
         name = list(self.experiment_results.keys())[0]
-        self.step_count = self.experiment_results[name][0].step_count
+        self.step_count = self.experiment_results[name][0].steps
 
     def plot_quiet_period_distributions(self):
         interburst_interval_distribution = {}
@@ -36,6 +37,8 @@ class Plotter:
             fig, ax = plt.subplots()
             ax.set_xlabel('Interburst interval')
             ax.set_ylabel('Freq distribution')
+            colors = [cm.jet(x) for x in np.linspace(0.0, 1.0, len(d.keys()))]
+            colorindex = 0
             for identifier, results in d.items():
                 identifier_data = {}
                 for simulation_agent_count, iid_list in results.items():
@@ -53,7 +56,8 @@ class Plotter:
                     dist = norm(overall_mean, overall_std)
                     values = [value for value in range(int(overall_mean - (3 * overall_std)), int(overall_mean + (3 * overall_std)))]
                     probabilities = [dist.pdf(value) for value in values]
-                    ax.plot(values, probabilities, label=str(simulation_agent_count)+'_pdf')
+                    ax.plot(values, probabilities, label=str(simulation_agent_count)+'_pdf', color=colors[colorindex])
+                    colorindex += 1
 
             plt.legend()
 
@@ -73,6 +77,7 @@ class Plotter:
             plt.savefig('{}_interburst_distributions_{}steps_{}.png'.format(string, self.step_count,
                                                                             "distribution"))
             plt.clf()
+            plt.close()
 
     def plot_animations(self):
         """Call a simulation's animation functionality."""
@@ -113,6 +118,7 @@ class Plotter:
             save_string = value.set_save_string('flashplot_combined', self.now)
             save_string = save_string
             plt.savefig(save_string)
+            plt.close()
 
     def plot_mean_vector_length_results(self):
         """Directly plot statistical results from a simulation."""

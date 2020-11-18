@@ -456,6 +456,7 @@ class Simulation:
         if write_gif:
             writervideo = animation.FFMpegWriter(fps=10)
             anim.save(save_string, writer=writervideo)
+            plt.close()
         if show_gif:
             plt.show()
         # plt.clf()
@@ -526,6 +527,7 @@ class Simulation:
 
             if write_gif:
                 plt.savefig(save_string)
+                plt.close()
             if show_gif:
                 plt.show()
 
