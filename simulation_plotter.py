@@ -20,12 +20,12 @@ class Plotter:
             swarm_interburst_interval_distribution[identifier] = {}
             for simulation in simulation_list:
                 k = simulation.total_agents
-                if not interburst_interval_distribution.get(k):
+                if not interburst_interval_distribution[identifier].get(k):
                     interburst_interval_distribution[identifier][k] = [simulation.calc_interburst_distribution()]
                 else:
                     interburst_interval_distribution[identifier][k].append(simulation.calc_interburst_distribution())
 
-                if not swarm_interburst_interval_distribution.get(k):
+                if not swarm_interburst_interval_distribution[identifier].get(k):
                     swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist()]
                 else:
                     swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
