@@ -34,6 +34,7 @@ DISTANCE_KEY = 'distances'
 
 USE_KURAMATO = False
 DUMP_DATA = True
+DO_PLOTTING = True
 
 
 def main():
@@ -74,14 +75,14 @@ def main():
         experiment_results = run_simulations(simulations, use_processes=True)
         if DUMP_DATA:
             write_results(experiment_results, now)
-
-    plotter = sp.Plotter(experiment_results, now)
-    # plotter.plot_animations()
-    # plotter.compare_obstacles_vs_no_obstacles()
-    plotter.plot_quiet_period_distributions()
+    if DO_PLOTTING:
+        plotter = sp.Plotter(experiment_results, now)
+        plotter.plot_example_animations()
+        # plotter.compare_obstacles_vs_no_obstacles()
+        plotter.plot_quiet_period_distributions()
+        if USE_KURAMATO:
+            plotter.plot_mean_vector_length_results()
     print("done")
-    if USE_KURAMATO:
-        plotter.plot_mean_vector_length_results()
 
 
 def write_results(experiment_results, now):
@@ -98,7 +99,9 @@ def write_results(experiment_results, now):
                     FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
                     # PHASE_KEY: [firefly.phase.tolist() for firefly in experiment.firefly_array],
                     # VOLTAGE_KEY: [f.voltage_instantaneous.tolist() for f in experiment.firefly_array],
-                    DISTANCE_KEY: experiment.distance_statistics
+                    DISTANCE_KEY: experiment.distance_statistics,
+                    OBSTACLE_KEY: [(obstacle.centerx, obstacle.centery, obstacle.radius)
+                                   for obstacle in experiment.obstacles if experiment.obstacles]
                 })
             else:
                 dict_to_dump[name] = [{

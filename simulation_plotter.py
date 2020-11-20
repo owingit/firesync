@@ -12,7 +12,7 @@ class Plotter:
         self.step_count = self.experiment_results[name][0].steps
 
     def plot_quiet_period_distributions(self):
-        distribution = False
+        distribution = True
         interburst_interval_distribution = {}
         swarm_interburst_interval_distribution = {}
         for identifier, simulation_list in self.experiment_results.items():
@@ -33,7 +33,7 @@ class Plotter:
         if distribution:
             self._plot_distributions(interburst_interval_distribution,
                                      swarm_interburst_interval_distribution)
-        else:
+        # else:
             self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
 
     def _plot_histograms(self, individual, group):
@@ -114,13 +114,13 @@ class Plotter:
             plt.clf()
             plt.close()
 
-    def plot_animations(self):
+    def plot_example_animations(self):
         """Call a simulation's animation functionality."""
         for identifier, simulation_list in self.experiment_results.items():
             for simulation in simulation_list:
                 if simulation.use_kuramato:
                     simulation.animate_phase_bins(self.now, show_gif=False, write_gif=True)
-            for simulation in simulation_list:
+            for simulation in [simulation_list[0]]:
                 simulation.animate_walk(self.now, show_gif=False, write_gif=True)
                 simulation.plot_bursts(self.now, show_gif=False, write_gif=True)
 
