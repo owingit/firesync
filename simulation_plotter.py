@@ -12,6 +12,7 @@ class Plotter:
         self.step_count = self.experiment_results[name][0].steps
 
     def plot_quiet_period_distributions(self):
+        distribution = False
         interburst_interval_distribution = {}
         swarm_interburst_interval_distribution = {}
         for identifier, simulation_list in self.experiment_results.items():
@@ -29,7 +30,41 @@ class Plotter:
                 else:
                     swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
 
-        self._plot_distributions(interburst_interval_distribution, swarm_interburst_interval_distribution)
+        if distribution:
+            self._plot_distributions(interburst_interval_distribution,
+                                     swarm_interburst_interval_distribution)
+        else:
+            self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
+
+    def _plot_histograms(self, individual, group):
+        dicts = [individual, group]
+        for i, d in enumerate(dicts):
+            for identifier, results in d.items():
+                fig, ax = plt.subplots()
+                ax.set_xlabel('Interburst interval')
+                ax.set_ylabel('Freq count')
+                ax.set_xlim(10, 50)
+                for simulation_agent_count, iid_list in results.items():
+                    iids = [x / 10 for iid in iid_list for x in iid]
+                    ax.hist(iids, bins=10, color='cyan', edgecolor='black')
+                    trials = len(list(d.keys()))
+                    if i == 0:
+                        if trials > 1:
+                            string = 'Individual_avg_over_' + str(trials)
+                        else:
+                            string = 'Individual_avg'
+                    else:
+                        if trials > 1:
+                            string = 'Swarm_avg_over_' + str(trials)
+                        else:
+                            string = 'Swarm_avg'
+                    plt.title('{}_interburst_distributions_{}ff_{}_steps'.format(string, simulation_agent_count,
+                                                                                 self.step_count))
+                    plt.savefig('histograms/{}_interburst_distributions_{}ff_{}_steps.png'.format(string,
+                                                                                                  simulation_agent_count,
+                                                                                                  self.step_count))
+                    plt.clf()
+                    plt.close()
 
     def _plot_distributions(self, individual, group):
         dicts = [individual, group]
