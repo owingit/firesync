@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
+import random
+from scipy.interpolate import make_interp_spline
 from scipy.stats import norm
 
 
@@ -33,8 +35,58 @@ class Plotter:
         if distribution:
             self._plot_distributions(interburst_interval_distribution,
                                      swarm_interburst_interval_distribution)
-        # else:
+        else:
             self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
+            self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
+
+    def _plot_all_histograms(self, individual, group):
+        dicts = [individual, group]
+        for i, d in enumerate(dicts):
+            fig, ax = plt.subplots()
+            ax.set_xlabel('Interburst interval')
+            ax.set_ylabel('Freq count')
+            colors = [cm.jet(x) for x in np.linspace(0.0, 1.0, len(d.keys())+1)]
+            ax.set_xlim(10, 50)
+            identifier_data = {}
+            trials = 25
+            colorindex = 0
+            for identifier, results in d.items():
+                for simulation_agent_count, iid_list in results.items():
+                    iids = [x / 10 for iid in iid_list for x in iid]
+                    if not identifier_data.get(simulation_agent_count):
+                        identifier_data[simulation_agent_count] = iids
+                    else:
+                        identifier_data[simulation_agent_count].append(iids)
+
+            sorted_dict = {k: identifier_data[k] for k in sorted(identifier_data)}
+            for simulation_agent_count, data in sorted_dict.items():
+
+                xs = [d for d in data]
+                y, bin_edges = np.histogram(xs, bins=20)
+                ys = [height for height in y]
+                bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+                x_nice = np.linspace(min(bin_centers), max(bin_centers), 300)
+                _nice = make_interp_spline(bin_centers, ys)
+                y_nice = _nice(x_nice)
+                ax.plot(x_nice, y_nice, label=str(simulation_agent_count),
+                        color=colors[colorindex], )
+                colorindex += 1
+
+            if i == 0:
+                if trials > 1:
+                    string = 'Individual_avg_over_' + str(trials)
+                else:
+                    string = 'Individual_avg'
+            else:
+                if trials > 1:
+                    string = 'Swarm_avg_over_' + str(trials)
+                else:
+                    string = 'Swarm_avg'
+            plt.title('{}_interburst_histograms'.format(string))
+            plt.legend()
+            plt.savefig('histograms/{}_interburst_histograms.png'.format(string))
+            plt.clf()
+            plt.close()
 
     def _plot_histograms(self, individual, group):
         dicts = [individual, group]
@@ -83,7 +135,8 @@ class Plotter:
                         else:
                             identifier_data[simulation_agent_count].append((np.mean(iid), np.std(iid)))
 
-                for simulation_agent_count, data in identifier_data.items():
+                sorted_dict = {k: identifier_data[k] for k in sorted(identifier_data)}
+                for simulation_agent_count, data in sorted_dict.items():
                     means = [datum[0] for datum in data]
                     stds = [datum[1] for datum in data]
                     overall_mean = sum(means) / len(means)
@@ -120,7 +173,7 @@ class Plotter:
             for simulation in simulation_list:
                 if simulation.use_kuramato:
                     simulation.animate_phase_bins(self.now, show_gif=False, write_gif=True)
-            for simulation in [simulation_list[0]]:
+            for simulation in [random.choice(simulation_list)]:
                 simulation.animate_walk(self.now, show_gif=False, write_gif=True)
                 simulation.plot_bursts(self.now, show_gif=False, write_gif=True)
 

@@ -77,7 +77,7 @@ def main():
             write_results(experiment_results, now)
     if DO_PLOTTING:
         plotter = sp.Plotter(experiment_results, now)
-        plotter.plot_example_animations()
+        # plotter.plot_example_animations()
         # plotter.compare_obstacles_vs_no_obstacles()
         plotter.plot_quiet_period_distributions()
         if USE_KURAMATO:
