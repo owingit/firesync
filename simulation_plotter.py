@@ -14,7 +14,7 @@ class Plotter:
         self.step_count = self.experiment_results[name][0].steps
 
     def plot_quiet_period_distributions(self):
-        distribution = True
+        distribution = False
         interburst_interval_distribution = {}
         swarm_interburst_interval_distribution = {}
         for identifier, simulation_list in self.experiment_results.items():
@@ -39,54 +39,60 @@ class Plotter:
             self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
             self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
 
-    def _plot_all_histograms(self, individual, group):
+    @staticmethod
+    def _plot_all_histograms(individual, group):
         dicts = [individual, group]
-        for i, d in enumerate(dicts):
-            fig, ax = plt.subplots()
-            ax.set_xlabel('Interburst interval')
-            ax.set_ylabel('Freq count')
-            colors = [cm.jet(x) for x in np.linspace(0.0, 1.0, len(d.keys())+1)]
-            ax.set_xlim(10, 50)
-            identifier_data = {}
-            trials = 25
-            colorindex = 0
-            for identifier, results in d.items():
-                for simulation_agent_count, iid_list in results.items():
-                    iids = [x / 10 for iid in iid_list for x in iid]
-                    if not identifier_data.get(simulation_agent_count):
-                        identifier_data[simulation_agent_count] = iids
+        bin_counts = [5, 10, 15, 20, 25, 30]
+        for bin_count in bin_counts:
+            for i, d in enumerate(dicts):
+                fig, ax = plt.subplots()
+                ax.set_xlabel('Interburst interval')
+                ax.set_ylabel('Freq count')
+                colors = [cm.jet(x) for x in np.linspace(0.0, 1.0, len(d.keys())+1)]
+                ax.set_xlim(10, 50)
+                identifier_data = {}
+                trials = 25
+                colorindex = 0
+                for identifier, results in d.items():
+                    for simulation_agent_count, iid_list in results.items():
+                        iids = [x / 10 for iid in iid_list for x in iid]
+                        if not identifier_data.get(simulation_agent_count):
+                            identifier_data[simulation_agent_count] = iids
+                        else:
+                            identifier_data[simulation_agent_count].append(iids)
+
+                sorted_dict = {k: identifier_data[k] for k in sorted(identifier_data)}
+                for simulation_agent_count, data in sorted_dict.items():
+
+                    xs = [d for d in data]
+                    y, bin_edges = np.histogram(xs, bins=bin_count, density=True)
+                    ys = [height for height in y]
+                    bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+                    x_nice = np.linspace(min(bin_centers), max(bin_centers), 300)
+                    _nice = make_interp_spline(bin_centers, ys)
+                    y_nice = _nice(x_nice)
+                    y_np = np.asarray(y_nice)
+                    low_values_flags = y_np < 0.0  # Where values are low
+                    y_np[low_values_flags] = 0.0
+                    ax.plot(x_nice, y_np, label=str(simulation_agent_count),
+                            color=colors[colorindex], )
+                    colorindex += 1
+
+                if i == 0:
+                    if trials > 1:
+                        string = '{}_bins_Individual_avg_over_'.format(bin_count) + str(trials)
                     else:
-                        identifier_data[simulation_agent_count].append(iids)
-
-            sorted_dict = {k: identifier_data[k] for k in sorted(identifier_data)}
-            for simulation_agent_count, data in sorted_dict.items():
-
-                xs = [d for d in data]
-                y, bin_edges = np.histogram(xs, bins=20)
-                ys = [height for height in y]
-                bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
-                x_nice = np.linspace(min(bin_centers), max(bin_centers), 300)
-                _nice = make_interp_spline(bin_centers, ys)
-                y_nice = _nice(x_nice)
-                ax.plot(x_nice, y_nice, label=str(simulation_agent_count),
-                        color=colors[colorindex], )
-                colorindex += 1
-
-            if i == 0:
-                if trials > 1:
-                    string = 'Individual_avg_over_' + str(trials)
+                        string = '{}_bins_Individual_avg'.format(bin_count)
                 else:
-                    string = 'Individual_avg'
-            else:
-                if trials > 1:
-                    string = 'Swarm_avg_over_' + str(trials)
-                else:
-                    string = 'Swarm_avg'
-            plt.title('{}_interburst_histograms'.format(string))
-            plt.legend()
-            plt.savefig('histograms/{}_interburst_histograms.png'.format(string))
-            plt.clf()
-            plt.close()
+                    if trials > 1:
+                        string = '{}_bins_Swarm_avg_over_'.format(bin_count) + str(trials)
+                    else:
+                        string = '{}_bins_Swarm_avg'.format(bin_count)
+                plt.title('{}_interburst_histograms'.format(string))
+                plt.legend()
+                plt.savefig('histograms/{}_interburst_histograms.png'.format(string))
+                plt.clf()
+                plt.close()
 
     def _plot_histograms(self, individual, group):
         dicts = [individual, group]
@@ -98,7 +104,7 @@ class Plotter:
                 ax.set_xlim(10, 50)
                 for simulation_agent_count, iid_list in results.items():
                     iids = [x / 10 for iid in iid_list for x in iid]
-                    ax.hist(iids, bins=10, color='cyan', edgecolor='black')
+                    ax.hist(iids, density=True, bins=10, color='cyan', edgecolor='black')
                     trials = len(list(d.keys()))
                     if i == 0:
                         if trials > 1:
