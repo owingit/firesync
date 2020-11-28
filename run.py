@@ -93,6 +93,10 @@ def write_results(experiment_results, now):
         for experiment in k:
             result = [x.strip() for x in experiment.boilerplate.split(',')]
             name = result[0] + result[1] + result[2] + '{}_steps'.format(experiment.steps)
+            if experiment.obstacles:
+                obs = [(obstacle.centerx, obstacle.centery, obstacle.radius) for obstacle in experiment.obstacles]
+            else:
+                obs = 'No obstacles'
             if dict_to_dump.get(name):
                 dict_to_dump[name].append({
                     TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
@@ -100,8 +104,7 @@ def write_results(experiment_results, now):
                     # PHASE_KEY: [firefly.phase.tolist() for firefly in experiment.firefly_array],
                     # VOLTAGE_KEY: [f.voltage_instantaneous.tolist() for f in experiment.firefly_array],
                     DISTANCE_KEY: experiment.distance_statistics,
-                    OBSTACLE_KEY: [(obstacle.centerx, obstacle.centery, obstacle.radius)
-                                   for obstacle in experiment.obstacles if experiment.obstacles]
+                    OBSTACLE_KEY: obs
                 })
             else:
                 dict_to_dump[name] = [{
@@ -110,8 +113,7 @@ def write_results(experiment_results, now):
                     # PHASE_KEY: [firefly.phase.tolist() for firefly in experiment.firefly_array],
                     # VOLTAGE_KEY: [f.voltage_instantaneous.tolist() for f in experiment.firefly_array],
                     DISTANCE_KEY: experiment.distance_statistics,
-                    OBSTACLE_KEY: [(obstacle.centerx, obstacle.centery, obstacle.radius)
-                                   for obstacle in experiment.obstacles if experiment.obstacles]
+                    OBSTACLE_KEY: obs
                 }]
             if write_networks:
                 write_results(experiment, now)

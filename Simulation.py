@@ -226,7 +226,6 @@ class Simulation:
         influential_neighbors = self.update_voltages(step)
         for ff, neighbor_phrases in influential_neighbors.items():
             min_phrase = min(neighbor_phrases) if neighbor_phrases else None
-            # may need this conditional
             if step in ff.ends_of_bursts:
                 ff.update_phrase_duration(min_phrase)
 

@@ -74,7 +74,7 @@ class Plotter:
                     y_np = np.asarray(y_nice)
                     low_values_flags = y_np < 0.0  # Where values are low
                     y_np[low_values_flags] = 0.0
-                    ax.plot(x_nice, y_np, label=str(simulation_agent_count),
+                    ax.plot(bin_centers, ys, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
                             color=colors[colorindex], )
                     colorindex += 1
 
@@ -90,7 +90,7 @@ class Plotter:
                         string = '{}_bins_Swarm_avg'.format(bin_count)
                 plt.title('{}_interburst_histograms'.format(string))
                 plt.legend()
-                plt.savefig('histograms/{}_interburst_histograms.png'.format(string))
+                plt.savefig('histograms/{}_interburst_histograms_not_smoothed.png'.format(string))
                 plt.clf()
                 plt.close()
 
