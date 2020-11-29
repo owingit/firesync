@@ -9,7 +9,7 @@ class DataSorter:
     def __init__(self, db_files):
         self.db_files = db_files
         self.raw_data = self.load_experiment_results()
-        self.sorted_data = self.sort_data()
+        self.sorted_data = self.sort_data(use_labels=True)
 
     def load_experiment_results(self):
         all_loaded_data = {}
@@ -19,7 +19,7 @@ class DataSorter:
                 all_loaded_data[db_file] = df
         return all_loaded_data
 
-    def sort_data(self):
+    def sort_data(self, use_labels=False):
         csvs = {}
         for identifier in self.raw_data.keys():
             csvs[identifier] = []
@@ -29,14 +29,27 @@ class DataSorter:
             for i in range(len(exploded_flash_steps)):
                 for index, flashed in enumerate(exploded_flash_steps[i]):
                     if flashed:
-                        csvs[identifier].append((exploded_positions[i][str(index)][0], exploded_positions[i][str(index)][1], index))
+                        if not use_labels:
+                            to_add = (exploded_positions[i][str(index)][0],
+                                      exploded_positions[i][str(index)][1],
+                                      index)
+                        else:
+                            label = i+1
+                            to_add = (label,
+                                      index)
+                        csvs[identifier].append(to_add)
         return csvs
 
-    def write_csv(self):
+    def write_csv(self, use_labels=False):
         for identifier in self.sorted_data:
-            with open('{}_csv.csv'.format(identifier.split('.json')[0]), 'w') as file:
-                writer = csv.writer(file)
-                writer.writerows(self.sorted_data[identifier])
+            if not use_labels:
+                with open('{}_csv.csv'.format(identifier.split('.json')[0]), 'w') as file:
+                    writer = csv.writer(file)
+                    writer.writerows(self.sorted_data[identifier])
+            else:
+                with open('{}_csv_labeled.csv'.format(identifier.split('.json')[0]), 'w') as file:
+                    writer = csv.writer(file)
+                    writer.writerows(self.sorted_data[identifier])
 
 
 db_path = 'data/raw_experiment_results/'
@@ -46,4 +59,4 @@ if len(sys.argv) > 1:
         db_files.append(db_path+f)
 
 db = DataSorter(db_files)
-db.write_csv()
+db.write_csv(use_labels=True)
