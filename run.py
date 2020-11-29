@@ -44,14 +44,26 @@ def main():
     # can pass 1 or more db files without specifying any other arguments
     if len(sys.argv) > 1 and "-n" not in sys.argv:
         for db in sys.argv[1:]:
-            obstacle_flag = False
-            if 'obstacles' in db:
-                obstacle_flag = True
-            raw_experiment_results = load_experiment_results(db)
-            if raw_experiment_results:
-                experiment_results.update(process_results_from_written_file(raw_experiment_results, obstacle_flag))
+            if os.path.isdir(os.path.abspath(db)):
+                for dbf in os.listdir(os.path.abspath(db)):
+                    obstacle_flag = False
+                    if 'obstacles' in dbf:
+                        obstacle_flag = True
+                    raw_experiment_results = load_experiment_results(os.path.abspath(db+'/'+dbf))
+                    if raw_experiment_results:
+                        experiment_results.update(
+                            process_results_from_written_file(raw_experiment_results, obstacle_flag))
+                    else:
+                        raise TypeError("json data expected!")
             else:
-                raise TypeError("json data expected!")
+                obstacle_flag = False
+                if 'obstacles' in db:
+                    obstacle_flag = True
+                raw_experiment_results = load_experiment_results(os.path.abspath(db))
+                if raw_experiment_results:
+                    experiment_results.update(process_results_from_written_file(raw_experiment_results, obstacle_flag))
+                else:
+                    raise TypeError("json data expected!")
 
     # can also pass multiple arguments to run new simulations (agent count, side len, simulation len, trials)
     elif len(sys.argv) > 1:
