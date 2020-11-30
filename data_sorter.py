@@ -35,7 +35,9 @@ class DataSorter:
                                       index)
                         else:
                             label = i+1
-                            to_add = (label,
+                            to_add = (exploded_positions[i][str(index)][0],
+                                      exploded_positions[i][str(index)][1],
+                                      label,
                                       index)
                         csvs[identifier].append(to_add)
         return csvs

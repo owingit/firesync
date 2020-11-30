@@ -89,9 +89,9 @@ def main():
             write_results(experiment_results, now)
     if DO_PLOTTING:
         plotter = sp.Plotter(experiment_results, now)
-        # plotter.plot_example_animations()
+        plotter.plot_example_animations()
         # plotter.compare_obstacles_vs_no_obstacles()
-        plotter.plot_quiet_period_distributions()
+        # plotter.plot_quiet_period_distributions()
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
     print("done")
@@ -207,7 +207,7 @@ def process_results_from_written_file(raw_experiment_results, if_obstacles, if_k
             if data.get(VOLTAGE_KEY):
                 firefly.voltage_instantaneous = data.get(VOLTAGE_KEY)[i]
 
-        if data.get(OBSTACLE_KEY):
+        if type(data.get(OBSTACLE_KEY)) == list:
             dummy_simulation.obstacles = [ob.Obstacle(blob[0], blob[1], blob[2])
                                           for blob in data.get(OBSTACLE_KEY)]
 

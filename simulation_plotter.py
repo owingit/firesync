@@ -17,30 +17,53 @@ class Plotter:
         distribution = False
         interburst_interval_distribution = {}
         swarm_interburst_interval_distribution = {}
+        ob_interburst_interval_distribution = {}
+        ob_swarm_interburst_interval_distribution = {}
         for identifier, simulation_list in self.experiment_results.items():
-            interburst_interval_distribution[identifier] = {}
-            swarm_interburst_interval_distribution[identifier] = {}
-            for simulation in simulation_list:
-                k = simulation.total_agents
-                if not interburst_interval_distribution[identifier].get(k):
-                    interburst_interval_distribution[identifier][k] = [simulation.calc_interburst_distribution()]
-                else:
-                    interburst_interval_distribution[identifier][k].append(simulation.calc_interburst_distribution())
+            if '_obstacles' in identifier:
+                ob_interburst_interval_distribution[identifier] = {}
+                ob_swarm_interburst_interval_distribution[identifier] = {}
+                for simulation in simulation_list:
+                    k = simulation.total_agents
+                    if not ob_interburst_interval_distribution[identifier].get(k):
+                        ob_interburst_interval_distribution[identifier][k] = [simulation.calc_interburst_distribution()]
+                    else:
+                        ob_interburst_interval_distribution[identifier][k].append(
+                            simulation.calc_interburst_distribution())
 
-                if not swarm_interburst_interval_distribution[identifier].get(k):
-                    swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist()]
-                else:
-                    swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
+                    if not ob_swarm_interburst_interval_distribution[identifier].get(k):
+                        ob_swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist()]
+                    else:
+                        ob_swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
+            else:
+                interburst_interval_distribution[identifier] = {}
+                swarm_interburst_interval_distribution[identifier] = {}
+                for simulation in simulation_list:
+                    k = simulation.total_agents
+                    if not interburst_interval_distribution[identifier].get(k):
+                        interburst_interval_distribution[identifier][k] = [simulation.calc_interburst_distribution()]
+                    else:
+                        interburst_interval_distribution[identifier][k].append(simulation.calc_interburst_distribution())
+
+                    if not swarm_interburst_interval_distribution[identifier].get(k):
+                        swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist()]
+                    else:
+                        swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
 
         if distribution:
             self._plot_distributions(interburst_interval_distribution,
                                      swarm_interburst_interval_distribution)
+            # self._plot_distributions(ob_interburst_interval_distribution,
+            #                          ob_swarm_interburst_interval_distribution)
         else:
             self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
             self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
+            # self._plot_histograms(ob_interburst_interval_distribution, ob_swarm_interburst_interval_distribution)
+            # self._plot_all_histograms(ob_interburst_interval_distribution, ob_swarm_interburst_interval_distribution,
+            #                           obs=True)
 
     @staticmethod
-    def _plot_all_histograms(individual, group):
+    def _plot_all_histograms(individual, group, obs=False):
         dicts = [individual, group]
         bin_counts = [5, 10, 15, 20, 25, 30]
         for bin_count in bin_counts:
@@ -51,7 +74,7 @@ class Plotter:
                 colors = [cm.jet(x) for x in np.linspace(0.0, 1.0, len(d.keys())+1)]
                 ax.set_xlim(10, 50)
                 identifier_data = {}
-                trials = 25
+                trials = 100
                 colorindex = 0
                 for identifier, results in d.items():
                     for simulation_agent_count, iid_list in results.items():
@@ -74,7 +97,7 @@ class Plotter:
                     y_np = np.asarray(y_nice)
                     low_values_flags = y_np < 0.0  # Where values are low
                     y_np[low_values_flags] = 0.0
-                    ax.plot(bin_centers, ys, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
+                    ax.plot(x_nice, y_nice, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
                             color=colors[colorindex], )
                     colorindex += 1
 
@@ -83,14 +106,18 @@ class Plotter:
                         string = '{}_bins_Individual_avg_over_'.format(bin_count) + str(trials)
                     else:
                         string = '{}_bins_Individual_avg'.format(bin_count)
+                    if obs:
+                        string = 'obs' + string
                 else:
                     if trials > 1:
                         string = '{}_bins_Swarm_avg_over_'.format(bin_count) + str(trials)
                     else:
                         string = '{}_bins_Swarm_avg'.format(bin_count)
+                    if obs:
+                        string = 'obs' + string
                 plt.title('{}_interburst_histograms'.format(string))
                 plt.legend()
-                plt.savefig('histograms/{}_interburst_histograms_not_smoothed.png'.format(string))
+                plt.savefig('histograms/{}_interburst_histograms.png'.format(string))
                 plt.clf()
                 plt.close()
 
@@ -111,11 +138,15 @@ class Plotter:
                             string = 'Individual_avg_over_' + str(trials)
                         else:
                             string = 'Individual_avg'
+                        if '_obstacles' in identifier:
+                            string = 'obs' + string
                     else:
                         if trials > 1:
                             string = 'Swarm_avg_over_' + str(trials)
                         else:
                             string = 'Swarm_avg'
+                        if '_obstacles' in identifier:
+                            string = 'obs' + string
                     plt.title('{}_interburst_distributions_{}ff_{}_steps'.format(string, simulation_agent_count,
                                                                                  self.step_count))
                     plt.savefig('histograms/{}_interburst_distributions_{}ff_{}_steps.png'.format(string,
@@ -155,17 +186,19 @@ class Plotter:
 
             plt.legend()
 
-            trials = len(list(d.keys()))
+            trials = 100
             if i == 0:
                 if trials > 1:
                     string = 'Individual_avg_over_' + str(trials)
                 else:
                     string = 'Individual_avg'
+
             else:
                 if trials > 1:
                     string = 'Swarm_avg_over_' + str(trials)
                 else:
                     string = 'Swarm_avg'
+
             plt.title('{}_interburst_distributions_{}steps_{}'.format(string, self.step_count,
                                                                       "distribution"))
             plt.savefig('{}_interburst_distributions_{}steps_{}.png'.format(string, self.step_count,
