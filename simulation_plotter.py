@@ -53,14 +53,18 @@ class Plotter:
         if distribution:
             self._plot_distributions(interburst_interval_distribution,
                                      swarm_interburst_interval_distribution)
-            # self._plot_distributions(ob_interburst_interval_distribution,
-            #                          ob_swarm_interburst_interval_distribution)
+            if len(ob_interburst_interval_distribution.items()) > 0:
+                self._plot_distributions(ob_interburst_interval_distribution,
+                                         ob_swarm_interburst_interval_distribution)
         else:
             self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
             self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
-            # self._plot_histograms(ob_interburst_interval_distribution, ob_swarm_interburst_interval_distribution)
-            # self._plot_all_histograms(ob_interburst_interval_distribution, ob_swarm_interburst_interval_distribution,
-            #                           obs=True)
+            if len(ob_interburst_interval_distribution.items()) > 0:
+                self._plot_histograms(ob_interburst_interval_distribution,
+                                      ob_swarm_interburst_interval_distribution)
+                self._plot_all_histograms(ob_interburst_interval_distribution,
+                                          ob_swarm_interburst_interval_distribution,
+                                          obs=True)
 
     @staticmethod
     def _plot_all_histograms(individual, group, obs=False):
@@ -147,11 +151,14 @@ class Plotter:
                             string = 'Swarm_avg'
                         if '_obstacles' in identifier:
                             string = 'obs' + string
-                    plt.title('{}_interburst_distributions_{}ff_{}_steps'.format(string, simulation_agent_count,
-                                                                                 self.step_count))
-                    plt.savefig('histograms/{}_interburst_distributions_{}ff_{}_steps.png'.format(string,
-                                                                                                  simulation_agent_count,
-                                                                                                  self.step_count))
+                    plt.title('{}_interburst_distributions_{}ff_{}_steps'.format(
+                        string,
+                        simulation_agent_count,
+                        self.step_count))
+                    plt.savefig('histograms/{}_interburst_distributions_{}ff_{}_steps.png'.format(
+                        string,
+                        simulation_agent_count,
+                        self.step_count))
                     plt.clf()
                     plt.close()
 

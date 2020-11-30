@@ -25,8 +25,6 @@ BETAS = "betas"
 DBS = "databases"
 PHRASE_DURATIONS = "phrases"
 
-PHASE_KEY = 'all_phases'
-VOLTAGE_KEY = 'all_voltages'
 TRACE_KEY = 'all_paths'
 FLASH_KEY = 'all_flash_steps'
 OBSTACLE_KEY = 'obstacles'
@@ -43,27 +41,7 @@ def main():
 
     # can pass 1 or more db files without specifying any other arguments
     if len(sys.argv) > 1 and "-n" not in sys.argv:
-        for db in sys.argv[1:]:
-            if os.path.isdir(os.path.abspath(db)):
-                for dbf in os.listdir(os.path.abspath(db)):
-                    obstacle_flag = False
-                    if 'obstacles' in dbf:
-                        obstacle_flag = True
-                    raw_experiment_results = load_experiment_results(os.path.abspath(db+'/'+dbf))
-                    if raw_experiment_results:
-                        experiment_results.update(
-                            process_results_from_written_file(raw_experiment_results, obstacle_flag))
-                    else:
-                        raise TypeError("json data expected!")
-            else:
-                obstacle_flag = False
-                if 'obstacles' in db:
-                    obstacle_flag = True
-                raw_experiment_results = load_experiment_results(os.path.abspath(db))
-                if raw_experiment_results:
-                    experiment_results.update(process_results_from_written_file(raw_experiment_results, obstacle_flag))
-                else:
-                    raise TypeError("json data expected!")
+        process_json_db(sys.argv, experiment_results)
 
     # can also pass multiple arguments to run new simulations (agent count, side len, simulation len, trials)
     elif len(sys.argv) > 1:
@@ -75,6 +53,7 @@ def main():
         args = parser.parse_args()
         num_list = [int(num) for num in args.num]
         params = set_constants(nao=num_list, sc=args.steps, sl=args.length, nt=args.trials)
+
         simulations = setup_simulations(params)
         experiment_results = run_simulations(simulations, use_processes=True)
         if DUMP_DATA:
@@ -97,70 +76,33 @@ def main():
     print("done")
 
 
-def write_results(experiment_results, now):
-    write_networks = False
-    for k in experiment_results.values():
-        dict_to_dump = {}
-        name = ''
-        for experiment in k:
-            result = [x.strip() for x in experiment.boilerplate.split(',')]
-            name = result[0] + result[1] + result[2] + '{}_steps'.format(experiment.steps)
-            if experiment.obstacles:
-                obs = [(obstacle.centerx, obstacle.centery, obstacle.radius) for obstacle in experiment.obstacles]
-            else:
-                obs = 'No obstacles'
-            if dict_to_dump.get(name):
-                dict_to_dump[name].append({
-                    TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
-                    FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
-                    # PHASE_KEY: [firefly.phase.tolist() for firefly in experiment.firefly_array],
-                    # VOLTAGE_KEY: [f.voltage_instantaneous.tolist() for f in experiment.firefly_array],
-                    DISTANCE_KEY: experiment.distance_statistics,
-                    OBSTACLE_KEY: obs
-                })
-            else:
-                dict_to_dump[name] = [{
-                    TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
-                    FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
-                    # PHASE_KEY: [firefly.phase.tolist() for firefly in experiment.firefly_array],
-                    # VOLTAGE_KEY: [f.voltage_instantaneous.tolist() for f in experiment.firefly_array],
-                    DISTANCE_KEY: experiment.distance_statistics,
-                    OBSTACLE_KEY: obs
-                }]
-            if write_networks:
-                write_results(experiment, now)
-        with open("data/raw_experiment_results/{}_experiment_results_{}.json".format(
-                name, str(now).replace(' ', '_')), 'w') as f:
-            json.dump(dict_to_dump, f)
+def process_json_db(program_argv, experiment_results):
+    """Process data from folder or database file
 
-
-def write_network_data(experiment, now):
-    if len(experiment.firefly_array) > 1:
-        if experiment.obstacles:
-            end_folder = '/with_obstacles'
+    :param program_argv: argv
+    :param experiment_results: dict to update
+    """
+    for db in program_argv[1:]:
+        if os.path.isdir(os.path.abspath(db)):
+            for dbf in os.listdir(os.path.abspath(db)):
+                obstacle_flag = False
+                if 'obstacles' in dbf:
+                    obstacle_flag = True
+                raw_experiment_results = load_experiment_results(os.path.abspath(db + '/' + dbf))
+                if raw_experiment_results:
+                    experiment_results.update(
+                        process_results_from_written_file(raw_experiment_results, obstacle_flag))
+                else:
+                    raise TypeError("json data expected!")
         else:
-            end_folder = '/without_obstacles'
-        pickle_folder = "pickled_networks_{}_steps_{}density{}beta{}Tb".format(
-            experiment.steps, (len(experiment.firefly_array) / experiment.n ** 2), experiment.beta,
-            experiment.phrase_duration
-        )
-        f = str(now).split('-')
-        s = f[0] + '_' + f[1] + '_' + f[2].split(' ')[0] + '_' + f[2].split(' ')[1].split(':')[0] + \
-            f[2].split(' ')[1].split(':')[1] + f[2].split(' ')[1].split(':')[2].split('.')[0]
-        landing_dir = '{}{}'.format(s, end_folder)
-        for i, cascade in experiment.networks_in_cascade_.items():
-            for j, network in enumerate(cascade):
-                if not os.path.exists('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir)):
-                    os.makedirs('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir))
-                nx.write_gpickle(network,
-                                 'data/raw_experiment_results/{}/{}/cascade_{}_network_{}.gpickle'.format(
-                                     pickle_folder, landing_dir, i, j
-                                 ))
-        for e, accumulated_network in experiment.connected_temporal_networks.items():
-            nx.write_gpickle(accumulated_network,
-                             'data/raw_experiment_results/{}/{}/accumulated_network_cascade_{}.gpickle'.format(
-                                 pickle_folder, landing_dir, e
-                             ))
+            obstacle_flag = False
+            if 'obstacles' in db:
+                obstacle_flag = True
+            raw_experiment_results = load_experiment_results(os.path.abspath(db))
+            if raw_experiment_results:
+                experiment_results.update(process_results_from_written_file(raw_experiment_results, obstacle_flag))
+            else:
+                raise TypeError("json data expected!")
 
 
 def load_experiment_results(db_file):
@@ -175,44 +117,46 @@ def load_experiment_results(db_file):
 
 def process_results_from_written_file(raw_experiment_results, if_obstacles, if_kuramato=USE_KURAMATO):
     name = list(raw_experiment_results.keys())[0]
-    retval = {name: []}
-    num_steps = len(raw_experiment_results[name][0].get(TRACE_KEY)[0].keys())
+    retdict = {name: []}
 
     for index in range(len(raw_experiment_results[name])):
-        data = raw_experiment_results[name][index]
-        num_agents = len(list(data.get(TRACE_KEY)))
-        beta = float(name.split('beta')[0].split('density')[1])
-        density = float(name.split('beta')[0].split('density')[0])
-        side_length = math.sqrt((float(num_agents)) / density)
-        phrase_duration = name.split('beta')[1].split('Tb')[0]
-        if phrase_duration != 'distribution':
-            phrase_duration = int(phrase_duration)
+        dummy_simulation = create_dummy_simulation_from_raw_experiment_results(
+            name, index, raw_experiment_results, if_obstacles, if_kuramato
+        )
+        retdict[name].append(dummy_simulation)
+    return retdict
 
-        dummy_simulation = Simulation.Simulation(num_agents=num_agents,
-                                                 side_length=side_length, step_count=num_steps, thetastar=math.pi * 2,
-                                                 coupling_strength=0.03,
-                                                 Tb=1.57,
-                                                 beta=beta, phrase_duration=phrase_duration, r_or_u="uniform",
-                                                 use_obstacles=if_obstacles, use_kuramato=if_kuramato)
-        dummy_simulation.has_run = True
 
-        for i, firefly in enumerate(dummy_simulation.firefly_array):
-            if data.get(PHASE_KEY):
-                firefly.phase = data.get(PHASE_KEY)[i]
-            firefly.trace = data.get(TRACE_KEY)[i]
-            for step, p in firefly.trace.items():
-                firefly.positionx[int(step)] = p[0]
-                firefly.positiony[int(step)] = p[1]
-            firefly.flashed_at_this_step = data.get(FLASH_KEY)[i]
-            if data.get(VOLTAGE_KEY):
-                firefly.voltage_instantaneous = data.get(VOLTAGE_KEY)[i]
+def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experiment_results, if_obstacles, if_kuramato):
+    num_steps = len(raw_experiment_results[name][0].get(TRACE_KEY)[0].keys())
+    data = raw_experiment_results[name][index]
+    num_agents = len(list(data.get(TRACE_KEY)))
+    beta = float(name.split('beta')[0].split('density')[1])
+    density = float(name.split('beta')[0].split('density')[0])
+    side_length = math.sqrt((float(num_agents)) / density)
+    phrase_duration = name.split('beta')[1].split('Tb')[0]
+    if phrase_duration != 'distribution':
+        phrase_duration = int(phrase_duration)
 
-        if type(data.get(OBSTACLE_KEY)) == list:
-            dummy_simulation.obstacles = [ob.Obstacle(blob[0], blob[1], blob[2])
-                                          for blob in data.get(OBSTACLE_KEY)]
+    dummy_simulation = Simulation.Simulation(num_agents=num_agents,
+                                             side_length=side_length, step_count=num_steps, thetastar=math.pi * 2,
+                                             coupling_strength=0.03,
+                                             Tb=1.57,
+                                             beta=beta, phrase_duration=phrase_duration, r_or_u="uniform",
+                                             use_obstacles=if_obstacles, use_kuramato=if_kuramato)
+    dummy_simulation.has_run = True
 
-        retval[name].append(dummy_simulation)
-    return retval
+    for i, firefly in enumerate(dummy_simulation.firefly_array):
+        firefly.trace = data.get(TRACE_KEY)[i]
+        for step, p in firefly.trace.items():
+            firefly.positionx[int(step)] = p[0]
+            firefly.positiony[int(step)] = p[1]
+        firefly.flashed_at_this_step = data.get(FLASH_KEY)[i]
+
+    if type(data.get(OBSTACLE_KEY)) == list:
+        dummy_simulation.obstacles = [ob.Obstacle(blob[0], blob[1], blob[2])
+                                      for blob in data.get(OBSTACLE_KEY)]
+    return dummy_simulation
 
 
 def set_constants(sl=None, sc=None, nao=None, nt=None):
@@ -248,6 +192,68 @@ def set_constants(sl=None, sc=None, nao=None, nt=None):
     return params
 
 
+def write_results(experiment_results, now):
+    write_networks = False
+    for k in experiment_results.values():
+        dict_to_dump = {}
+        name = ''
+        for experiment in k:
+            result = [x.strip() for x in experiment.boilerplate.split(',')]
+            name = result[0] + result[1] + result[2] + '{}_steps'.format(experiment.steps)
+            if experiment.obstacles:
+                obs = [(obstacle.centerx, obstacle.centery, obstacle.radius) for obstacle in experiment.obstacles]
+            else:
+                obs = 'No obstacles'
+            if dict_to_dump.get(name):
+                dict_to_dump[name].append({
+                    TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
+                    FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
+                    DISTANCE_KEY: experiment.distance_statistics,
+                    OBSTACLE_KEY: obs
+                })
+            else:
+                dict_to_dump[name] = [{
+                    TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
+                    FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
+                    DISTANCE_KEY: experiment.distance_statistics,
+                    OBSTACLE_KEY: obs
+                }]
+            if write_networks:
+                write_network_data(experiment, now)
+        with open("data/raw_experiment_results/{}_experiment_results_{}.json".format(
+                name, str(now).replace(' ', '_')), 'w') as f:
+            json.dump(dict_to_dump, f)
+
+
+def write_network_data(experiment, now):
+    if len(experiment.firefly_array) > 1:
+        if experiment.obstacles:
+            end_folder = '/with_obstacles'
+        else:
+            end_folder = '/without_obstacles'
+        pickle_folder = "pickled_networks_{}_steps_{}density{}beta{}Tb".format(
+            experiment.steps, (len(experiment.firefly_array) / experiment.n ** 2), experiment.beta,
+            experiment.phrase_duration
+        )
+        f = str(now).split('-')
+        s = f[0] + '_' + f[1] + '_' + f[2].split(' ')[0] + '_' + f[2].split(' ')[1].split(':')[0] + \
+            f[2].split(' ')[1].split(':')[1] + f[2].split(' ')[1].split(':')[2].split('.')[0]
+        landing_dir = '{}{}'.format(s, end_folder)
+        for i, cascade in experiment.networks_in_cascade_.items():
+            for j, network in enumerate(cascade):
+                if not os.path.exists('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir)):
+                    os.makedirs('data/raw_experiment_results/{}/{}'.format(pickle_folder, landing_dir))
+                nx.write_gpickle(network,
+                                 'data/raw_experiment_results/{}/{}/cascade_{}_network_{}.gpickle'.format(
+                                     pickle_folder, landing_dir, i, j
+                                 ))
+        for e, accumulated_network in experiment.connected_temporal_networks.items():
+            nx.write_gpickle(accumulated_network,
+                             'data/raw_experiment_results/{}/{}/accumulated_network_cascade_{}.gpickle'.format(
+                                 pickle_folder, landing_dir, e
+                             ))
+
+
 def setup_simulations(params):
     """
     Instantiate t*n*cs*tb*trial simulation objects with their parameters, where
@@ -269,10 +275,6 @@ def setup_simulations(params):
                     for beta in params[BETAS]:
                         for phrase_duration in params[PHRASE_DURATIONS]:
                             for trial in range(0, params[TRIALS]):
-                                # if trial % 2 == 0:
-                                #     use_obstacles = False
-                                # else:
-                                #     use_obstacles = True
                                 n = params[NS]
                                 step_count = params[STEPS]
                                 simulation = Simulation.Simulation(num_agents=num_agents,

@@ -68,6 +68,8 @@ class Simulation:
             self.boilerplate = '{}density, {}beta, {}Tb'.format(self.total_agents / (self.n * self.n),
                                                                 beta, phrase_duration)
 
+        # network stuff
+        self.use_networks = False
         self.delta_t = 10 * [ff.charging_time + ff.discharging_time for ff in [self.firefly_array[0]]][0]
         self.delta_x = {}
         self.connection_probability = None
@@ -104,17 +106,18 @@ class Simulation:
         self.distance_statistics[0] = {'length': len(initial_flashers),
                                        'positions': initial_flashers}
 
-        centroid = None
-        if initial_flashers:
-            centroid = simulation_helpers.centroid(initial_flashers)
-        for i in range(int(self.delta_t)):
-            if centroid:
-                k_mean_differences = [np.sqrt((x - centroid[0]) ** 2 + (y - centroid[1]) ** 2) for (x, y, _) in
-                                      initial_flashers]
-                self.delta_x[i] = np.mean(k_mean_differences)
-            else:
-                self.delta_x[i] = math.sqrt(self.delta_t)
-        self.connection_probability = 1 / max(list(self.delta_x.keys()))
+        if self.use_networks:
+            centroid = None
+            if initial_flashers:
+                centroid = simulation_helpers.centroid(initial_flashers)
+            for i in range(int(self.delta_t)):
+                if centroid:
+                    k_mean_differences = [np.sqrt((x - centroid[0]) ** 2 + (y - centroid[1]) ** 2) for (x, y, _) in
+                                          initial_flashers]
+                    self.delta_x[i] = np.mean(k_mean_differences)
+                else:
+                    self.delta_x[i] = math.sqrt(self.delta_t)
+            self.connection_probability = 1 / max(list(self.delta_x.keys()))
 
         if self.use_kuramato:
             phase_zero_fireflies = []
@@ -175,51 +178,15 @@ class Simulation:
 
             self.distance_statistics[step] = {'length': len(flashers_at_time_t),
                                               'positions': flashers_at_time_t}
-            self.cascade_logic(step)
+            if self.use_networks:
+                self.cascade_logic(step)
 
-        # self.sort_networks_into_cascades()
-        # for e in self.connected_temporal_networks.keys():
-        #     simulation_helpers._visualize(self.connected_temporal_networks[e], self.indices_in_cascade_[e], self.n)
+                self.sort_networks_into_cascades()
+                for e in self.connected_temporal_networks.keys():
+                    simulation_helpers._visualize(
+                        self.connected_temporal_networks[e], self.indices_in_cascade_[e], self.n
+                    )
         self.has_run = True
-
-    def sort_networks_into_cascades(self):
-        if len(self.firefly_array) > 1:
-            sorted_networks = network_sorter.NetworkSort(self.firefly_array, self.steps,
-                                                         self.firefly_array[0].get_phrase_duration())
-            sorted_timesteps_in_clusters = sorted_networks.sorted_timesteps_in_clusters
-
-            for i, tmstps in enumerate(sorted_timesteps_in_clusters):
-                self.indices_in_cascade_[i] = tmstps
-            counter = 0
-            for i, l in self.indices_in_cascade_.items():
-                for index in l:
-                    if counter >= len(list(self.cascade_networks.keys())):
-                        cascade_key = list(self.cascade_networks.keys())[-1]
-                    else:
-                        cascade_key = list(self.cascade_networks.keys())[counter]
-
-                    if self.cascade_networks.get(index):
-                        if self.networks_in_cascade_.get(i):
-                            self.networks_in_cascade_[i].append(self.cascade_networks[index])
-                        else:
-                            self.networks_in_cascade_[i] = [self.cascade_networks[index]]
-                        counter += 1
-                    elif index < cascade_key:
-                        if index == l[-1]:
-                            if self.networks_in_cascade_.get(i):
-                                self.networks_in_cascade_[i].append(self.cascade_networks[cascade_key])
-                            else:
-                                self.networks_in_cascade_[i] = [self.cascade_networks[cascade_key]]
-                    else:
-                        if self.networks_in_cascade_.get(i):
-                            self.networks_in_cascade_[i].append(self.cascade_networks[cascade_key])
-                        else:
-                            self.networks_in_cascade_[i] = [self.cascade_networks[cascade_key]]
-                        # index is greater, and we skipped over. so add
-                        counter += 1
-                if self.networks_in_cascade_.get(i):
-                    self.connected_temporal_networks[i] = nx.MultiDiGraph(
-                        nx.compose_all([graph for graph in self.networks_in_cascade_[i]]))
 
     def integrate_and_fire_interactions(self, step):
         self.update_epsilon_and_readiness(step)
@@ -228,49 +195,6 @@ class Simulation:
             min_phrase = min(neighbor_phrases) if neighbor_phrases else None
             if step in ff.ends_of_bursts:
                 ff.update_phrase_duration(min_phrase)
-
-    def update_voltages(self, step):
-        influential_neighbors = {}
-        for i in range(0, self.total_agents):
-            ff_i = self.firefly_array[i]
-            influential_neighbors[ff_i] = []
-
-            dvt = ff_i.set_dvt(step)
-
-            int_term = 0
-            env_signal = 0
-            for j in range(0, self.total_agents):
-                if i == j:
-                    continue
-                else:
-                    skip_dist = False
-                    ff_j = self.firefly_array[j]
-                    if self.obstacles:
-                        if not skip_dist:
-
-                            line = simulation_helpers.generate_line_points((ff_i.positionx[step], ff_i.positiony[step]),
-                                                                           (ff_j.positionx[step], ff_j.positiony[step]),
-                                                                           num_points=100)
-                            for obstacle in self.obstacles:
-                                if not skip_dist:
-                                    for xy in line:
-                                        if obstacle.contains(xy[0], xy[1]):
-                                            skip_dist = True
-                                            break
-                        if skip_dist:
-                            continue
-                        else:
-                            influential_neighbors[ff_i].append(ff_j.phrase_duration)
-                            int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
-                            env_signal = env_signal + (1 - ff_j.is_charging)
-                    else:
-                        influential_neighbors[ff_i].append(ff_j.phrase_duration)
-                        int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
-                        env_signal = env_signal + (1 - ff_j.is_charging)
-
-                    # this is what one firefly contributes to the charging / discharging
-            ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + (dvt + int_term) * self.timestepsize
-        return influential_neighbors
 
     def update_epsilon_and_readiness(self, step):
         # update epsilon and readiness
@@ -297,29 +221,63 @@ class Simulation:
                 if len(ff_i.ends_of_bursts) == 0 and not ff_i.flashed_at_this_step[step]:
                     ff_i.set_ready()
 
+    def update_voltages(self, step):
+        influential_neighbors = {}
+        for i in range(0, self.total_agents):
+            ff_i = self.firefly_array[i]
+            influential_neighbors[ff_i] = []
+
+            dvt = ff_i.set_dvt(step)
+
+            int_term = 0
+            env_signal = 0
+            for j in range(0, self.total_agents):
+                if i == j:
+                    continue
+                else:
+                    ff_j = self.firefly_array[j]
+                    if self.obstacles:
+                        skip_dist = self.evaluate_obstacles(ff_i, ff_j, step)
+                        if skip_dist:
+                            continue
+                        else:
+                            influential_neighbors[ff_i].append(ff_j.phrase_duration)
+                            int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
+                            env_signal = env_signal + (1 - ff_j.is_charging)
+                    else:
+                        influential_neighbors[ff_i].append(ff_j.phrase_duration)
+                        int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
+                        env_signal = env_signal + (1 - ff_j.is_charging)
+
+                    # this is what one firefly contributes to the charging / discharging
+            ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + (dvt + int_term) * self.timestepsize
+        return influential_neighbors
+
+    def evaluate_obstacles(self, ff_i, ff_j, step):
+        skip = False
+        line = simulation_helpers.generate_line_points(
+            (ff_i.positionx[step], ff_i.positiony[step]),
+            (ff_j.positionx[step], ff_j.positiony[step]),
+            num_points=100
+        )
+        for obstacle in self.obstacles:
+            if not skip:
+                for xy in line:
+                    if obstacle.contains(xy[0], xy[1]):
+                        skip = True
+                        break
+        return skip
+
     def kuramato_phase_interactions(self, step):
         """Each firefly's phase wave interacts with the phase wave of its detectable neighbors by the Kuramato model."""
         for i in range(0, self.total_agents):
             ff_i = self.firefly_array[i]
             kuramato = 0
             for j in range(0, self.total_agents):
-                if i == j:
-                    continue
-                else:
-                    skip_dist = False
+                if i != j:
                     ff_j = self.firefly_array[j]
                     if self.obstacles:
-                        if not skip_dist:
-
-                            line = simulation_helpers.generate_line_points((ff_i.positionx[step], ff_i.positiony[step]),
-                                                                           (ff_j.positionx[step], ff_j.positiony[step]),
-                                                                           num_points=100)
-                            for obstacle in self.obstacles:
-                                if not skip_dist:
-                                    for xy in line:
-                                        if obstacle.contains(xy[0], xy[1]):
-                                            skip_dist = True
-                                            break
+                        skip_dist = self.evaluate_obstacles(ff_i, ff_j, step)
                         if skip_dist:
                             continue
                         else:
@@ -329,10 +287,9 @@ class Simulation:
                     else:
                         dist = ((ff_j.positionx[step] - ff_i.positionx[step]) ** 2 +
                                 (ff_j.positiony[step] - ff_i.positiony[step]) ** 2) ** 0.5
-                    if dist == 0:
-                        continue
-                    kuramato_term = math.sin(ff_j.phase[step - 1] - ff_i.phase[step - 1]) / dist
-                    kuramato += kuramato_term
+                    if dist != 0:
+                        kuramato_term = math.sin(ff_j.phase[step - 1] - ff_i.phase[step - 1]) / dist
+                        kuramato += kuramato_term
 
             coupling_term = (ff_i.phase[step - 1] + self.coupling_strength * kuramato)
             ff_i.phase[step] = (ff_i.nat_frequency + coupling_term) % math.radians(360)
@@ -736,3 +693,42 @@ class Simulation:
             num_keys = max(list(self.delta_x.keys())) + 1
             for i in range(int(num_keys), int(num_keys + self.delta_t)):
                 self.delta_x[i] = math.sqrt(self.delta_t)
+
+    def sort_networks_into_cascades(self):
+        if len(self.firefly_array) > 1:
+            sorted_networks = network_sorter.NetworkSort(self.firefly_array, self.steps,
+                                                         self.firefly_array[0].get_phrase_duration())
+            sorted_timesteps_in_clusters = sorted_networks.sorted_timesteps_in_clusters
+
+            for i, tmstps in enumerate(sorted_timesteps_in_clusters):
+                self.indices_in_cascade_[i] = tmstps
+            counter = 0
+            for i, l in self.indices_in_cascade_.items():
+                for index in l:
+                    if counter >= len(list(self.cascade_networks.keys())):
+                        cascade_key = list(self.cascade_networks.keys())[-1]
+                    else:
+                        cascade_key = list(self.cascade_networks.keys())[counter]
+
+                    if self.cascade_networks.get(index):
+                        if self.networks_in_cascade_.get(i):
+                            self.networks_in_cascade_[i].append(self.cascade_networks[index])
+                        else:
+                            self.networks_in_cascade_[i] = [self.cascade_networks[index]]
+                        counter += 1
+                    elif index < cascade_key:
+                        if index == l[-1]:
+                            if self.networks_in_cascade_.get(i):
+                                self.networks_in_cascade_[i].append(self.cascade_networks[cascade_key])
+                            else:
+                                self.networks_in_cascade_[i] = [self.cascade_networks[cascade_key]]
+                    else:
+                        if self.networks_in_cascade_.get(i):
+                            self.networks_in_cascade_[i].append(self.cascade_networks[cascade_key])
+                        else:
+                            self.networks_in_cascade_[i] = [self.cascade_networks[cascade_key]]
+                        # index is greater, and we skipped over. so add
+                        counter += 1
+                if self.networks_in_cascade_.get(i):
+                    self.connected_temporal_networks[i] = nx.MultiDiGraph(
+                        nx.compose_all([graph for graph in self.networks_in_cascade_[i]]))
