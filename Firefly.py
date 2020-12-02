@@ -62,7 +62,7 @@ class Firefly:
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
         if phrase_duration == "distribution":
-            self.phrase_duration = np.random.normal(loc=250, scale=50)
+            self.phrase_duration = np.random.normal(loc=680, scale=200)
         else:
             self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
 
