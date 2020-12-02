@@ -14,7 +14,7 @@ class Plotter:
         self.step_count = self.experiment_results[name][0].steps
 
     def plot_quiet_period_distributions(self):
-        distribution = False
+        distribution = True
         interburst_interval_distribution = {}
         swarm_interburst_interval_distribution = {}
         ob_interburst_interval_distribution = {}
@@ -50,21 +50,44 @@ class Plotter:
                     else:
                         swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
 
-        if distribution:
-            self._plot_distributions(interburst_interval_distribution,
-                                     swarm_interburst_interval_distribution)
-            if len(ob_interburst_interval_distribution.items()) > 0:
-                self._plot_distributions(ob_interburst_interval_distribution,
-                                         ob_swarm_interburst_interval_distribution)
-        else:
-            self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
-            self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
-            if len(ob_interburst_interval_distribution.items()) > 0:
-                self._plot_histograms(ob_interburst_interval_distribution,
-                                      ob_swarm_interburst_interval_distribution)
-                self._plot_all_histograms(ob_interburst_interval_distribution,
-                                          ob_swarm_interburst_interval_distribution,
-                                          obs=True)
+        # self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
+        # self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
+        # if len(ob_interburst_interval_distribution.items()) > 0:
+        #     self._plot_histograms(ob_interburst_interval_distribution,
+        #                           ob_swarm_interburst_interval_distribution)
+        #     self._plot_all_histograms(ob_interburst_interval_distribution,
+        #                               ob_swarm_interburst_interval_distribution,
+        #                               obs=True)
+        s_means, s_stds, i_means, i_stds = self.calc_means_stds(interburst_interval_distribution,
+                                                                swarm_interburst_interval_distribution)
+        print(s_means)
+        print(s_stds)
+        print(i_means)
+        print(i_stds)
+
+    @staticmethod
+    def calc_means_stds(interburst_interval_distribution, swarm_interburst_interval_distribution):
+        keys = [1, 5, 10, 15, 20, 30, 40, 50]
+        individual_dicts = [vals for vals in interburst_interval_distribution.values()]
+        i_d = {list(individual_dicts[i].keys())[0]: list(individual_dicts[i].values())
+               for i in range(len(individual_dicts))}
+        individual_means = {k: 0 for k in keys}
+        individual_stds = {k: 0 for k in keys}
+        for key in keys:
+            lvals = [value for list_of_vals in i_d[key] for vals in list_of_vals for value in vals]
+            individual_means[key] = np.mean(lvals)
+            individual_stds[key] = np.std(lvals)
+        swarm_dicts = [v for v in swarm_interburst_interval_distribution.values()]
+        s_d = {list(swarm_dicts[i].keys())[0]: list(swarm_dicts[i].values())
+               for i in range(len(swarm_dicts))}
+        swarm_means = {k: 0 for k in keys}
+        swarm_stds = {k: 0 for k in keys}
+        for key in keys:
+            lvals = [s_value for s_list_of_vals in s_d[key] for s_vals in s_list_of_vals for s_value in s_vals]
+            swarm_means[key] = np.mean(lvals)
+            swarm_stds[key] = np.std(lvals)
+        return swarm_means, swarm_stds, individual_means, individual_stds
+
 
     @staticmethod
     def _plot_all_histograms(individual, group, obs=False):
@@ -161,57 +184,6 @@ class Plotter:
                         self.step_count))
                     plt.clf()
                     plt.close()
-
-    def _plot_distributions(self, individual, group):
-        dicts = [individual, group]
-        for i, d in enumerate(dicts):
-            fig, ax = plt.subplots()
-            ax.set_xlabel('Interburst interval')
-            ax.set_ylabel('Freq distribution')
-            colors = [cm.jet(x) for x in np.linspace(0.0, 1.0, len(d.keys()))]
-            colorindex = 0
-            for identifier, results in d.items():
-                identifier_data = {}
-                for simulation_agent_count, iid_list in results.items():
-                    for iid in iid_list:
-                        if not identifier_data.get(simulation_agent_count):
-                            identifier_data[simulation_agent_count] = [(np.mean(iid), np.std(iid))]
-                        else:
-                            identifier_data[simulation_agent_count].append((np.mean(iid), np.std(iid)))
-
-                sorted_dict = {k: identifier_data[k] for k in sorted(identifier_data)}
-                for simulation_agent_count, data in sorted_dict.items():
-                    means = [datum[0] for datum in data]
-                    stds = [datum[1] for datum in data]
-                    overall_mean = sum(means) / len(means)
-                    overall_std = sum(stds) / len(stds)
-                    dist = norm(overall_mean, overall_std)
-                    values = [value for value in range(int(overall_mean - (3 * overall_std)), int(overall_mean + (3 * overall_std)))]
-                    probabilities = [dist.pdf(value) for value in values]
-                    ax.plot(values, probabilities, label=str(simulation_agent_count)+'_pdf', color=colors[colorindex])
-                    colorindex += 1
-
-            plt.legend()
-
-            trials = 100
-            if i == 0:
-                if trials > 1:
-                    string = 'Individual_avg_over_' + str(trials)
-                else:
-                    string = 'Individual_avg'
-
-            else:
-                if trials > 1:
-                    string = 'Swarm_avg_over_' + str(trials)
-                else:
-                    string = 'Swarm_avg'
-
-            plt.title('{}_interburst_distributions_{}steps_{}'.format(string, self.step_count,
-                                                                      "distribution"))
-            plt.savefig('{}_interburst_distributions_{}steps_{}.png'.format(string, self.step_count,
-                                                                            "distribution"))
-            plt.clf()
-            plt.close()
 
     def plot_example_animations(self):
         """Call a simulation's animation functionality."""
