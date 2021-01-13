@@ -49,15 +49,14 @@ class Plotter:
                         swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist()]
                     else:
                         swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
-
-        # self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
-        # self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
-        # if len(ob_interburst_interval_distribution.items()) > 0:
-        #     self._plot_histograms(ob_interburst_interval_distribution,
-        #                           ob_swarm_interburst_interval_distribution)
-        #     self._plot_all_histograms(ob_interburst_interval_distribution,
-        #                               ob_swarm_interburst_interval_distribution,
-        #                               obs=True)
+        self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
+        self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution)
+        if len(ob_interburst_interval_distribution.items()) > 0:
+            self._plot_histograms(ob_interburst_interval_distribution,
+                                  ob_swarm_interburst_interval_distribution)
+            self._plot_all_histograms(ob_interburst_interval_distribution,
+                                      ob_swarm_interburst_interval_distribution,
+                                      obs=True)
         s_means, s_stds, i_means, i_stds = self.calc_means_stds(interburst_interval_distribution,
                                                                 swarm_interburst_interval_distribution)
         print(s_means)
@@ -101,7 +100,7 @@ class Plotter:
                 colors = [cm.jet(x) for x in np.linspace(0.0, 1.0, len(d.keys())+1)]
                 ax.set_xlim(10, 50)
                 identifier_data = {}
-                trials = 100
+                trials = len(list(d.keys()))
                 colorindex = 0
                 for identifier, results in d.items():
                     for simulation_agent_count, iid_list in results.items():
@@ -118,14 +117,16 @@ class Plotter:
                     y, bin_edges = np.histogram(xs, bins=bin_count, density=True)
                     ys = [height for height in y]
                     bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
-                    x_nice = np.linspace(min(bin_centers), max(bin_centers), 300)
-                    _nice = make_interp_spline(bin_centers, ys)
-                    y_nice = _nice(x_nice)
-                    y_np = np.asarray(y_nice)
-                    low_values_flags = y_np < 0.0  # Where values are low
-                    y_np[low_values_flags] = 0.0
-                    ax.plot(x_nice, y_nice, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
-                            color=colors[colorindex], )
+                    # x_nice = np.linspace(min(bin_centers), max(bin_centers), 300)
+                    # _nice = make_interp_spline(bin_centers, ys)
+                    # y_nice = _nice(x_nice)
+                    # y_np = np.asarray(y_nice)
+                    # low_values_flags = y_np < 0.0  # Where values are low
+                    # y_np[low_values_flags] = 0.0
+                    # ax.plot(x_nice, y_nice, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
+                    #         color=colors[colorindex], )
+                    ax.plot(bin_centers, ys, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
+                            color=colors[colorindex])
                     colorindex += 1
 
                 if i == 0:
@@ -144,7 +145,7 @@ class Plotter:
                         string = 'obs' + string
                 plt.title('{}_interburst_histograms'.format(string))
                 plt.legend()
-                plt.savefig('histograms/{}_interburst_histograms.png'.format(string))
+                plt.savefig('histograms/{}_interburst_histograms_not_smothed.png'.format(string))
                 plt.clf()
                 plt.close()
 
