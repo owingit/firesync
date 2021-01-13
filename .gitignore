@@ -1,5 +1,9 @@
 *.pdf
+images/*
 data/*
+data_from_cluster/*
+histograms/*
+raw_data/*
 .DS_Store
 __pycache__/*
 .idea/*
