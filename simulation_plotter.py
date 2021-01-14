@@ -185,14 +185,17 @@ class Plotter:
                     plt.clf()
                     plt.close()
 
-    def plot_example_animations(self):
+    def plot_example_animations(self, do_3d=False):
         """Call a simulation's animation functionality."""
         for identifier, simulation_list in self.experiment_results.items():
             for simulation in simulation_list:
                 if simulation.use_kuramato:
                     simulation.animate_phase_bins(self.now, show_gif=False, write_gif=True)
             for simulation in [random.choice(simulation_list)]:
-                simulation.animate_walk(self.now, show_gif=False, write_gif=True)
+                if not do_3d:
+                    simulation.animate_walk(self.now, show_gif=False, write_gif=True)
+                else:
+                    simulation.animate_3d_walk(self.now, show_gif=True, write_gif=False)
                 simulation.plot_bursts(self.now, show_gif=False, write_gif=True)
 
     def compare_obstacles_vs_no_obstacles(self):

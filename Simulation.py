@@ -469,12 +469,12 @@ class Simulation:
         plt.style.use('seaborn-pastel')
         plt.clf()
         fig = plt.figure()
-        ax = Axes3D(fig=fig)
+        ax = fig.add_subplot(111, projection='3d')
         xdatas = {n: [] for n in range(0, self.total_agents)}
         ydatas = {m: [] for m in range(0, self.total_agents)}
         zdatas = {o: [] for o in range(0, self.total_agents)}
 
-        firefly_paths = [ax.plot3D([], [], [], '*')[0] for _ in self.firefly_array]
+        firefly_paths = [ax.plot([], [], [], '*')[0] for _ in self.firefly_array]
 
         def animate(i, flies, lines):
             for line, fly in zip(lines, flies):
@@ -486,6 +486,7 @@ class Simulation:
                 ydatas[fly.number].append(fly.trace.get(step_key)[1])
                 zdatas[fly.number].append(fly.trace.get(step_key)[2])
                 line.set_data(xdatas[fly.number][0], ydatas[fly.number][0])
+                line.set_3d_properties(zdatas[fly.number][0])
                 if fly.flashed_at_this_step[i]:
                     line.set_color('red')
                 else:
@@ -508,18 +509,21 @@ class Simulation:
         ax.set_zlabel('Z')
 
         if self.obstacles:
+            # TODO:
+            # this part isn't working yet
             centers = []
             radii = []
             for obstacle in self.obstacles:
                 centers.append((obstacle.centerx, obstacle.centery, obstacle.centerz))
                 radii.append(obstacle.radius)
             for c, r in zip(centers, radii):
+                ax1 = fig.gca(projection='3d')
                 u, v = np.mgrid[0:2 * np.pi:50j, 0:np.pi:50j]
                 x = r * np.cos(u) * np.sin(v)
                 y = r * np.sin(u) * np.sin(v)
                 z = r * np.cos(v)
 
-                ax.plot_surface(x - c[0], y - c[1], z - c[2], color=np.random.choice(['g', 'b']),
+                ax1.plot_surface(x - c[0], y - c[1], z - c[2], color=np.random.choice(['g', 'b']),
                                 alpha=0.5 * np.random.random() + 0.5)
 
         interval = 300

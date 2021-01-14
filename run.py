@@ -37,6 +37,7 @@ DO_PLOTTING = True
 
 def main():
     now = datetime.now()
+    do_3d = True
     experiment_results = {}
 
     # can pass 1 or more db files without specifying any other arguments
@@ -54,7 +55,7 @@ def main():
         num_list = [int(num) for num in args.num]
         params = set_constants(nao=num_list, sc=args.steps, sl=args.length, nt=args.trials)
 
-        simulations = setup_simulations(params, do_3d=True)
+        simulations = setup_simulations(params, do_3d=do_3d)
         experiment_results = run_simulations(simulations, use_processes=True)
         if DUMP_DATA:
             write_results(experiment_results, now)
@@ -68,7 +69,7 @@ def main():
             write_results(experiment_results, now)
     if DO_PLOTTING:
         plotter = sp.Plotter(experiment_results, now)
-        plotter.plot_example_animations()
+        plotter.plot_example_animations(do_3d=do_3d)
         # plotter.compare_obstacles_vs_no_obstacles()
         # plotter.plot_quiet_period_distributions()
         if USE_KURAMATO:
