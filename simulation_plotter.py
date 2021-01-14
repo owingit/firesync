@@ -87,7 +87,6 @@ class Plotter:
             swarm_stds[key] = np.std(lvals)
         return swarm_means, swarm_stds, individual_means, individual_stds
 
-
     @staticmethod
     def _plot_all_histograms(individual, group, obs=False):
         dicts = [individual, group]

@@ -31,7 +31,7 @@ OBSTACLE_KEY = 'obstacles'
 DISTANCE_KEY = 'distances'
 
 USE_KURAMATO = False
-DUMP_DATA = True
+DUMP_DATA = False
 DO_PLOTTING = True
 
 
@@ -54,7 +54,7 @@ def main():
         num_list = [int(num) for num in args.num]
         params = set_constants(nao=num_list, sc=args.steps, sl=args.length, nt=args.trials)
 
-        simulations = setup_simulations(params)
+        simulations = setup_simulations(params, do_3d=True)
         experiment_results = run_simulations(simulations, use_processes=True)
         if DUMP_DATA:
             write_results(experiment_results, now)
@@ -68,9 +68,9 @@ def main():
             write_results(experiment_results, now)
     if DO_PLOTTING:
         plotter = sp.Plotter(experiment_results, now)
-        # plotter.plot_example_animations()
+        plotter.plot_example_animations()
         # plotter.compare_obstacles_vs_no_obstacles()
-        plotter.plot_quiet_period_distributions()
+        # plotter.plot_quiet_period_distributions()
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
     print("done")
@@ -254,7 +254,7 @@ def write_network_data(experiment, now):
                              ))
 
 
-def setup_simulations(params):
+def setup_simulations(params, do_3d=False):
     """
     Instantiate t*n*cs*tb*trial simulation objects with their parameters, where
 
@@ -287,7 +287,8 @@ def setup_simulations(params):
                                                                    phrase_duration=phrase_duration,
                                                                    r_or_u="random",
                                                                    use_obstacles=True,
-                                                                   use_kuramato=USE_KURAMATO)
+                                                                   use_kuramato=USE_KURAMATO,
+                                                                   do_3d=do_3d)
                                 simulations.append(simulation)
     return simulations
 
