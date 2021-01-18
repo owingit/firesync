@@ -87,9 +87,9 @@ class Plotter:
             swarm_stds[key] = np.std(lvals)
         return swarm_means, swarm_stds, individual_means, individual_stds
 
-
     @staticmethod
     def _plot_all_histograms(individual, group, obs=False):
+        niceify = False
         dicts = [individual, group]
         bin_counts = [5, 10, 15, 20, 25, 30]
         for bin_count in bin_counts:
@@ -113,20 +113,28 @@ class Plotter:
                 sorted_dict = {k: identifier_data[k] for k in sorted(identifier_data)}
                 for simulation_agent_count, data in sorted_dict.items():
 
-                    xs = [d for d in data]
+                    xs = []
+                    for e in data:
+                        if type(e) is not list:
+                            xs.append(e)
+                        else:
+                            for element in e:
+                                xs.append(element)
                     y, bin_edges = np.histogram(xs, bins=bin_count, density=True)
                     ys = [height for height in y]
                     bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
-                    # x_nice = np.linspace(min(bin_centers), max(bin_centers), 300)
-                    # _nice = make_interp_spline(bin_centers, ys)
-                    # y_nice = _nice(x_nice)
-                    # y_np = np.asarray(y_nice)
-                    # low_values_flags = y_np < 0.0  # Where values are low
-                    # y_np[low_values_flags] = 0.0
-                    # ax.plot(x_nice, y_nice, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
-                    #         color=colors[colorindex], )
-                    ax.plot(bin_centers, ys, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
-                            color=colors[colorindex])
+                    if niceify:
+                        x_nice = np.linspace(min(bin_centers), max(bin_centers), 300)
+                        _nice = make_interp_spline(bin_centers, ys)
+                        y_nice = _nice(x_nice)
+                        y_np = np.asarray(y_nice)
+                        low_values_flags = y_np < 0.0  # Where values are low
+                        y_np[low_values_flags] = 0.0
+                        ax.plot(x_nice, y_nice, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
+                                color=colors[colorindex], )
+                    else:
+                        ax.plot(bin_centers, ys, label='{}_agents_{}_pts'.format(simulation_agent_count, len(xs)),
+                                color=colors[colorindex])
                     colorindex += 1
 
                 if i == 0:
@@ -145,7 +153,7 @@ class Plotter:
                         string = 'obs' + string
                 plt.title('{}_interburst_histograms'.format(string))
                 plt.legend()
-                plt.savefig('histograms/{}_interburst_histograms_not_smothed.png'.format(string))
+                plt.savefig('histograms/{}_interburst_histograms_smoothed.png'.format(string))
                 plt.clf()
                 plt.close()
 
