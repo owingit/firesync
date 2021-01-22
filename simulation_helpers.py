@@ -112,6 +112,6 @@ def get_initial_distribution():
         data = list(reader)
 
     good_data = [float(d[0]) for d in data]
-    trimmed_data = [(d / 10) for d in good_data if d > 3.0]
+    trimmed_data = [d for d in good_data if d > 3.0]
     print(trimmed_data)
     print('close')
