@@ -113,5 +113,13 @@ def get_initial_distribution():
 
     good_data = [float(d[0]) for d in data]
     trimmed_data = [d for d in good_data if d > 3.0]
-    print(trimmed_data)
-    print('close')
+    return trimmed_data
+
+
+def get_kde():
+    with open('data/ib01ff.csv', newline='') as f:
+        reader = csv.reader(f)
+        data = list(reader)
+
+    good_data = [float(d[0]) for d in data]
+    trimmed_data = [d for d in good_data if d > 3.0]
