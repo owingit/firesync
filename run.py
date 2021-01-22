@@ -4,6 +4,7 @@ import networkx as nx
 import os
 import sys
 import csv
+import numpy as np
 from datetime import datetime
 
 import multiprocessing
@@ -50,9 +51,12 @@ def main():
         parser.add_argument("--steps", "-s", type=int, required=True)
         parser.add_argument("--length", "-l", type=int, required=True)
         parser.add_argument("--trials", "-t", type=int, required=True)
+        parser.add_argument("--beta_range", "-b", type=float, nargs='+',required=True)
         args = parser.parse_args()
+        betas = [float(b) for b in args.beta_range]
+        beta_range = np.arange(betas[0], betas[1], 0.01)
         num_list = [int(num) for num in args.num]
-        params = set_constants(nao=num_list, sc=args.steps, sl=args.length, nt=args.trials)
+        params = set_constants(nao=num_list, sc=args.steps, sl=args.length, nt=args.trials, betas=beta_range)
 
         simulations = setup_simulations(params)
         experiment_results = run_simulations(simulations, use_processes=True)
@@ -70,7 +74,7 @@ def main():
         plotter = sp.Plotter(experiment_results, now)
         # plotter.plot_example_animations()
         # plotter.compare_obstacles_vs_no_obstacles()
-        plotter.plot_quiet_period_distributions()
+        plotter.plot_quiet_period_distributions(on_betas=True)
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
     print("done")
@@ -159,29 +163,33 @@ def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experim
     return dummy_simulation
 
 
-def set_constants(sl=None, sc=None, nao=None, nt=None):
+def set_constants(sl=None, sc=None, nao=None, nt=None, betas=None):
     if not sl:
         side_length = 16
     else:
         side_length = sl
     if not nao:
-        num_agent_options = [1, 4, 9, 16, 25, 64, 100]
+        num_agent_options = [20]
     else:
         num_agent_options = nao
     if not sc:
-        step_count = 3200
+        step_count = 4000
     else:
         step_count = sc
     if not nt:
         num_trials = 5
     else:
         num_trials = nt
+    if betas is None:
+        btas = [0.1]
+    else:
+        btas = betas
     params = {}
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
     coupling_strengths = [0.03]  # , 0.2, 0.5]
     params[PHRASE_DURATIONS] = ["distribution"]
-    params[BETAS] = [0.1]
+    params[BETAS] = btas
     params[TSTARS] = thetastars
     params[TBS] = inter_burst_intervals
     params[NS] = side_length

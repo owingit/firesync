@@ -3,6 +3,7 @@ import numpy
 import matplotlib.pyplot as plt
 import math
 import random
+import csv
 
 from bokeh.io import output_file, show
 from bokeh.models import Ellipse, GraphRenderer, StaticLayoutProvider
@@ -103,3 +104,14 @@ def _visualize(network, i_s, side_length):
 
 def cluster_indices(label, labels):
     return numpy.where(labels == label)[0]
+
+
+def get_initial_distribution():
+    with open('data/ib01ff.csv', newline='') as f:
+        reader = csv.reader(f)
+        data = list(reader)
+
+    good_data = [float(d[0]) for d in data]
+    trimmed_data = [(d / 10) for d in good_data if d > 3.0]
+    print(trimmed_data)
+    print('close')
