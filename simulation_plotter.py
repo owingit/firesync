@@ -85,8 +85,12 @@ class Plotter:
         individual_stds = {k: 0 for k in keys}
         for key in keys:
             lvals = [value for list_of_vals in i_d[key] for vals in list_of_vals for value in vals]
-            individual_means[key] = np.mean(lvals)
-            individual_stds[key] = np.std(lvals)
+            if len(lvals) > 0:
+                individual_means[key] = np.mean(lvals)
+                individual_stds[key] = np.std(lvals)
+            else:
+                individual_means[key] = 'No distribution found'
+                individual_stds[key] = 'No distribution found'
         swarm_dicts = [v for v in swarm_interburst_interval_distribution.values()]
         s_d = {list(swarm_dicts[i].keys())[0]: list(swarm_dicts[i].values())
                for i in range(len(swarm_dicts))}
@@ -95,8 +99,13 @@ class Plotter:
         swarm_stds = {k: 0 for k in keys}
         for key in keys:
             lvals = [s_value for s_list_of_vals in s_d[key] for s_vals in s_list_of_vals for s_value in s_vals]
-            swarm_means[key] = np.mean(lvals)
-            swarm_stds[key] = np.std(lvals)
+            if len(lvals) > 0:
+                swarm_means[key] = np.mean(lvals)
+                swarm_stds[key] = np.std(lvals)
+            else:
+                swarm_means[key] = 'No distribution found'
+                swarm_stds[key] = 'No distribution found'
+
         return swarm_means, swarm_stds, individual_means, individual_stds
 
     @staticmethod
@@ -193,28 +202,36 @@ class Plotter:
                     ax.hist(iids, density=True, bins=bins, color='cyan', edgecolor='black')
                     trials = len(iids)
                     if i == 0:
-                        if trials > 1:
-                            string = 'Individual_avg_over_' + str(trials) + '_{}mean_{}std'.format(math.floor(i_means[k]),
-                                                                                                   math.floor(i_stds[k]))
+                        if type(i_means[k]) is not str:
+                            mean = math.floor(i_means[k])
+                            std = math.floor(i_stds[k])
                         else:
-                            string = 'Individual_avg' + '_{}mean_{}std'.format(math.floor(i_means[k]),
-                                                                               math.floor(i_stds[k]))
+                            mean = 'xx'
+                            std = 'xx'
+                        if trials > 1:
+                            string = 'Individual_avg_over_' + str(trials) + '_{}mean_{}std'.format(mean, std)
+                        else:
+                            string = 'Individual_avg' + '_{}mean_{}std'.format(mean, std)
                         if '_obstacles' in identifier:
                             string = 'obs' + string
                     else:
-                        if trials > 1:
-                            string = 'Swarm_avg_over_' + str(trials) + '_{}mean_{}std'.format(math.floor(s_means[k]),
-                                                                                              math.floor(s_stds[k]))
+                        if type(s_means[k]) is not str:
+                            mean = math.floor(s_means[k])
+                            std = math.floor(s_stds[k])
                         else:
-                            string = 'Swarm_avg' + '_{}mean_{}std'.format(math.floor(s_means[k]),
-                                                                          math.floor(s_stds[k]))
+                            mean = 'xx'
+                            std = 'xx'
+                        if trials > 1:
+                            string = 'Swarm_avg_over_' + str(trials) + '_{}mean_{}std'.format(mean, std)
+                        else:
+                            string = 'Swarm_avg' + '_{}mean_{}std'.format(mean, std)
                         if '_obstacles' in identifier:
                             string = 'obs' + string
                     plt.title('{}{}_{}mean_{}std'.format(
                         k,
                         independent_var,
-                        math.floor(s_means[k]/10),
-                        math.floor(s_stds[k]/10)
+                        mean,
+                        std
                         ))
                     plt.savefig('histograms/{}_interburst_distributions_{}{}_{}_steps.png'.format(
                         string,

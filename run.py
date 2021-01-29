@@ -52,16 +52,22 @@ def main():
         parser.add_argument("--length", "-l", type=int, required=True)
         parser.add_argument("--trials", "-t", type=int, required=True)
         parser.add_argument("--beta_range", "-b", type=float, nargs='+', required=False)
+        parser.add_argument('--obstacles', dest='obstacles', action='store_true')
+        parser.set_defaults(obstacles=False)
         args = parser.parse_args()
         if args.beta_range is not None:
             betas = [float(b) for b in args.beta_range]
-            beta_range = np.arange(betas[0], betas[1], 0.01)
+            if len(betas) == 1:
+                beta_range = betas
+            else:
+                beta_range = np.arange(betas[0], betas[1], 0.01)
         else:
             beta_range = None
+        use_obstacles = args.obstacles
         num_list = [int(num) for num in args.num]
         params = set_constants(nao=num_list, sc=args.steps, sl=args.length, nt=args.trials, betas=beta_range)
 
-        simulations = setup_simulations(params)
+        simulations = setup_simulations(params, use_obstacles=use_obstacles)
         experiment_results = run_simulations(simulations, use_processes=True)
         if DUMP_DATA:
             write_results(experiment_results, now)
@@ -265,7 +271,7 @@ def write_network_data(experiment, now):
                              ))
 
 
-def setup_simulations(params):
+def setup_simulations(params, use_obstacles=False):
     """
     Instantiate t*n*cs*tb*trial simulation objects with their parameters, where
 
@@ -297,7 +303,7 @@ def setup_simulations(params):
                                                                    beta=beta,
                                                                    phrase_duration=phrase_duration,
                                                                    r_or_u="random",
-                                                                   use_obstacles=True,
+                                                                   use_obstacles=use_obstacles,
                                                                    use_kuramato=USE_KURAMATO)
                                 simulations.append(simulation)
     return simulations
