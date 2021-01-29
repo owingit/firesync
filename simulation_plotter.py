@@ -63,18 +63,17 @@ class Plotter:
             self._plot_histograms(ob_interburst_interval_distribution,
                                   ob_swarm_interburst_interval_distribution,
                                   on_betas=on_betas)
-            # self._plot_all_histograms(ob_interburst_interval_distribution,
-            #                           ob_swarm_interburst_interval_distribution,
-            #                           obs=True, on_betas=on_betas)
+            self._plot_all_histograms(ob_interburst_interval_distribution,
+                                      ob_swarm_interburst_interval_distribution,
+                                      obs=True, on_betas=on_betas)
         else:
             s_means, s_stds, i_means, i_stds = self.calc_means_stds(interburst_interval_distribution,
                                                                     swarm_interburst_interval_distribution,
                                                                     on_betas=on_betas)
             self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
                                   on_betas=on_betas)
-            # self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
-            #                           on_betas=on_betas)
-
+            self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
+                                      on_betas=on_betas)
 
     @staticmethod
     def calc_means_stds(interburst_interval_distribution, swarm_interburst_interval_distribution, on_betas=False):
@@ -112,10 +111,10 @@ class Plotter:
         for bin_count in bin_counts:
             for i, d in enumerate(dicts):
                 fig, ax = plt.subplots()
-                ax.set_xlabel('Interburst interval')
+                ax.set_xlabel('Interburst interval [s]')
                 ax.set_ylabel('Freq count')
                 colors = [cm.jet(x) for x in np.linspace(0.0, 1.0, len(d.keys())+1)]
-                ax.set_xlim(0, 50)
+                ax.set_xlim(0, 100)
                 identifier_data = {}
                 colorindex = 0
 
@@ -139,18 +138,19 @@ class Plotter:
                                 xs.append(element)
                     y, bin_edges = np.histogram(xs, bins=bin_count, density=True)
                     ys = [height for height in y]
+                    normed_ys = [float(x) / sum(ys) for x in ys]
                     bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
                     if niceify:
                         x_nice = np.linspace(min(bin_centers), max(bin_centers), 300)
-                        _nice = make_interp_spline(bin_centers, ys)
+                        _nice = make_interp_spline(bin_centers, normed_ys)
                         y_nice = _nice(x_nice)
                         y_np = np.asarray(y_nice)
                         low_values_flags = y_np < 0.0  # Where values are low
                         y_np[low_values_flags] = 0.0
                         ax.plot(x_nice, y_nice, label='{}_{}_{}_pts'.format(k, independent_var, len(xs)),
-                                color=colors[colorindex], )
+                                color=colors[colorindex],)
                     else:
-                        ax.plot(bin_centers, ys, label='{}_{}_{}_pts'.format(k, independent_var, len(xs)),
+                        ax.plot(bin_centers, normed_ys, label='{}_{}_{}_pts'.format(k, independent_var, len(xs)),
                                 color=colors[colorindex])
                     colorindex += 1
 
@@ -164,7 +164,7 @@ class Plotter:
                         string = 'obs' + string
                 plt.title('{}_interburst_histograms'.format(string))
                 plt.legend()
-                plt.savefig('histograms/{}_interburst_histograms_smoothed.png'.format(string))
+                plt.savefig('histograms/{}_interburst_histograms_{}_smoothed.png'.format(string, str(niceify)))
                 plt.clf()
                 plt.close()
 
@@ -180,12 +180,17 @@ class Plotter:
         for i, d in enumerate(dicts):
             for identifier, results in d.items():
                 fig, ax = plt.subplots()
-                ax.set_xlabel('Interburst interval')
+                ax.set_xlabel('Interburst interval [s]')
                 ax.set_ylabel('Freq count')
-                ax.set_xlim(0, 50)
+                ax.set_xlim(0, 100)
                 for k, iid_list in results.items():
                     iids = [x / 10 for iid in iid_list for x in iid]
-                    ax.hist(iids, density=True, bins=10, color='cyan', edgecolor='black')
+                    if k == 1:
+                        ax.set_xlim(0, 500)
+                        bins = 50
+                    else:
+                        bins = 20
+                    ax.hist(iids, density=True, bins=bins, color='cyan', edgecolor='black')
                     trials = len(iids)
                     if i == 0:
                         if trials > 1:
@@ -205,11 +210,11 @@ class Plotter:
                                                                           math.floor(s_stds[k]))
                         if '_obstacles' in identifier:
                             string = 'obs' + string
-                    plt.title('{}_interburst_distributions_{}{}_{}_steps'.format(
-                        string,
+                    plt.title('{}{}_{}mean_{}std'.format(
                         k,
                         independent_var,
-                        self.step_count,
+                        math.floor(s_means[k]/10),
+                        math.floor(s_stds[k]/10)
                         ))
                     plt.savefig('histograms/{}_interburst_distributions_{}{}_{}_steps.png'.format(
                         string,
@@ -219,19 +224,16 @@ class Plotter:
                     plt.clf()
                     plt.close()
 
-        min_key = min(s_means, key=lambda q: s_means[q])
-        print('Min swarm mean interburst distribution is: ' + str(min(s_means, key=s_means.get)))
-        print('std of min mean interburst distribution is: ' + str(s_stds[min_key]))
-
     def plot_example_animations(self):
         """Call a simulation's animation functionality."""
         for identifier, simulation_list in self.experiment_results.items():
             for simulation in simulation_list:
                 if simulation.use_kuramato:
                     simulation.animate_phase_bins(self.now, show_gif=False, write_gif=True)
-            for simulation in [random.choice(simulation_list)]:
-                simulation.animate_walk(self.now, show_gif=False, write_gif=True)
-                simulation.plot_bursts(self.now, show_gif=False, write_gif=True)
+            for i, simulation in enumerate(simulation_list):
+                if simulation.total_agents == 1:
+                #   simulation.animate_walk(self.now, show_gif=False, write_gif=True)
+                    simulation.plot_bursts(self.now, instance=i, show_gif=False, write_gif=True)
 
     def compare_obstacles_vs_no_obstacles(self):
         """Plot obstacle simulations against no obstacles."""
@@ -244,12 +246,12 @@ class Plotter:
         show = False
         write = True
         for identifier, simulation_list in self.experiment_results.items():
-            for simulation in simulation_list:
+            for i, simulation in enumerate(simulation_list):
                 if simulation.obstacles:
                     obstacle_simulations.append(simulation)
                 else:
                     non_obstacle_simulations.append(simulation)
-                simulation.plot_bursts(self.now, show_gif=show, write_gif=write, shared_ax=bursts_axis)
+                simulation.plot_bursts(self.now, i, show_gif=show, write_gif=write, shared_ax=bursts_axis)
         try:
             assert len(obstacle_simulations) == len(non_obstacle_simulations), \
                 'Need both obstacle and non obstacle sims!'

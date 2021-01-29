@@ -104,7 +104,7 @@ class Firefly:
 
     def update_quiet_period(self):
         self.quiet_period = self.phrase_duration - (
-                 (self.charging_time + self.discharging_time) * self.flashes_per_burst
+                 (self.charging_time + self.discharging_time * 10) * self.flashes_per_burst
         )
 
     def move(self, current_step, obstacles, flip_direction=False):
