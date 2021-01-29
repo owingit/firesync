@@ -62,7 +62,8 @@ class Firefly:
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
         if phrase_duration == "distribution":
-            self.phrase_duration = np.random.uniform(100, 900, size=1)
+            self.phrase_duration = random.choice(simulation_helpers.get_initial_distribution())
+            # np.random.uniform(50, 1200, size=1)
         else:
             self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
 
@@ -96,14 +97,14 @@ class Firefly:
 
     def update_phrase_duration(self, fastest_phrase=None):
         if fastest_phrase is None:
-            self.phrase_duration = np.random.uniform(100, 900, size=1)
+            self.phrase_duration = random.choice(simulation_helpers.get_initial_distribution())
         else:
             self.phrase_duration = fastest_phrase
         self.update_quiet_period()
 
     def update_quiet_period(self):
         self.quiet_period = self.phrase_duration - (
-                 (self.charging_time + self.discharging_time) * self.flashes_per_burst
+                 (self.charging_time + self.discharging_time * 10) * self.flashes_per_burst
         )
 
     def move(self, current_step, obstacles, flip_direction=False):

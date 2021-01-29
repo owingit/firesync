@@ -450,7 +450,7 @@ class Simulation:
             )
         return save_string
 
-    def plot_bursts(self, now, write_gif=False, show_gif=False, shared_ax=None):
+    def plot_bursts(self, now, instance, write_gif=False, show_gif=False, shared_ax=None):
         """Plot the flash bursts over time"""
         assert self.has_run, "Plot cannot render until the simulation has been run!"
         plt.style.use('seaborn-pastel')
@@ -479,7 +479,7 @@ class Simulation:
                            label=label, color=color)
 
         if not shared_ax:
-            save_string = self.set_save_string('flashplot', now)
+            save_string = self.set_save_string('flashplot_{}'.format(instance), now)
 
             if write_gif:
                 plt.savefig(save_string)
@@ -654,7 +654,12 @@ class Simulation:
         for step in range(self.steps):
             for firefly in self.firefly_array:
                 if firefly.flashed_at_this_step[step] is True:
+                    # s = step * 10
+                    # if s >= self.steps:
+                    #     break
+                    # else:
                     to_plot[step] += 1
+                        # to_plot[s] += 1
         return to_plot
 
     def cascade_logic(self, step):
