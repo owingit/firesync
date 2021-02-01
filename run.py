@@ -158,6 +158,7 @@ def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experim
     density = float(name.split('beta')[0].split('density')[0])
     side_length = math.sqrt((float(num_agents)) / density)
     phrase_duration = name.split('beta')[1].split('Tb')[0]
+    epsilon_delta = 0.3333 # placeholder
     if phrase_duration != 'distribution':
         phrase_duration = int(phrase_duration)
 
@@ -166,6 +167,7 @@ def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experim
                                              coupling_strength=0.03,
                                              Tb=1.57,
                                              beta=beta, phrase_duration=phrase_duration, r_or_u="uniform",
+                                             epsilon_delta=epsilon_delta,
                                              use_obstacles=if_obstacles, use_kuramato=if_kuramato)
     dummy_simulation.has_run = True
 
