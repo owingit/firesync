@@ -55,8 +55,8 @@ class Firefly:
 
         # integrate and fire params
         self.beta = beta
-        self.charging_time = 2.5
-        self.discharging_time = 5.5  # timesteps, where each timestep = 0.1s
+        self.charging_time = np.random.normal(loc=4.5, scale=1)
+        self.discharging_time = np.random.normal(loc=1.1, scale=0.3)
         self.is_charging = 1
         self.voltage_threshold = 1
         self.epsilon_delta = epsilon_delta
@@ -70,7 +70,7 @@ class Firefly:
         else:
             self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
 
-        self.flashes_per_burst = 7  # random.randint(5, 8)
+        self.flashes_per_burst = int(np.random.normal(loc=4, scale=1.2))
         self.flashes_left_in_current_burst = self.flashes_per_burst
         self.quiet_period = self.phrase_duration - (
                  (self.charging_time + self.discharging_time) * self.flashes_per_burst
@@ -107,7 +107,7 @@ class Firefly:
 
     def update_quiet_period(self):
         self.quiet_period = self.phrase_duration - (
-                 (self.charging_time + self.discharging_time * 10) * self.flashes_per_burst
+                 ((self.charging_time + self.discharging_time) / self.timestepsize) * self.flashes_per_burst
         )
 
     def move(self, current_step, obstacles, flip_direction=False):
