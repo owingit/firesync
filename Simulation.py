@@ -23,7 +23,7 @@ IS_TEST = False
 
 class Simulation:
     def __init__(self, num_agents, side_length, step_count, thetastar, coupling_strength, Tb,
-                 beta, phrase_duration, r_or_u="uniform",
+                 beta, phrase_duration, epsilon_delta, r_or_u="uniform",
                  use_obstacles=False, use_kuramato=True):
         self.firefly_array = []
         self.timestepsize = 0.1
@@ -41,6 +41,7 @@ class Simulation:
         self.steps = step_count
         self.r_or_u = r_or_u
         self.tstar_seed = thetastar
+        self.epsilon_delta = epsilon_delta
         thetastars = [np.linspace(-thetastar, thetastar, simulation_helpers.TSTAR_RANGE)]
         self.thetastar = list(thetastars[random.randint(0, len(thetastars) - 1)])
         self.use_obstacles = use_obstacles
@@ -58,6 +59,7 @@ class Simulation:
                 n=self.n, steps=self.steps, r_or_u=self.r_or_u,
                 beta=beta,
                 phrase_duration=phrase_duration,
+                epsilon_delta=epsilon_delta,
                 use_periodic_boundary_conditions=False,
                 tb=self.Tb, obstacles=self.obstacles)
             )
@@ -202,7 +204,7 @@ class Simulation:
             ff_i = self.firefly_array[i]
 
             # update epsilon to discharging (V is high enough)
-            if ff_i.voltage_instantaneous[step - 1] >= (2 * ff_i.voltage_threshold / 3):
+            if ff_i.voltage_instantaneous[step - 1] >= ff_i.discharging_threshold:
                 if len(ff_i.ends_of_bursts) == 0:
                     # this is the "waited enough time" step
                     ff_i.set_ready()
@@ -212,7 +214,7 @@ class Simulation:
                     ff_i.is_charging = 0
 
             # update epsilon to charging if agent flashes
-            elif ff_i.voltage_instantaneous[step - 1] <= ff_i.voltage_threshold / 3:
+            elif ff_i.voltage_instantaneous[step - 1] <= ff_i.charging_threshold:
                 if ff_i.is_charging == 0 and ff_i.ready:
                     ff_i.flash(step)
                     ff_i.is_charging = 1

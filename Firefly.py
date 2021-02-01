@@ -9,7 +9,7 @@ import simulation_helpers
 class Firefly:
     #  Number, total number, theta*, thetastar_range, box dimension, number of steps,
     #  starting distribution, whether initially fed, whether to use periodic boundary conditions
-    def __init__(self, i, total, tstar, tstar_range, n, steps, r_or_u, beta, phrase_duration,
+    def __init__(self, i, total, tstar, tstar_range, n, steps, r_or_u, beta, phrase_duration, epsilon_delta,
                  use_periodic_boundary_conditions=True,
                  tb=1.57, obstacles=None):
         self.name = "FF #{}".format(i)
@@ -55,10 +55,13 @@ class Firefly:
 
         # integrate and fire params
         self.beta = beta
-        self.charging_time = 5
-        self.discharging_time = 5  # timesteps, where each timestep = 0.1s
+        self.charging_time = 2.5
+        self.discharging_time = 5.5  # timesteps, where each timestep = 0.1s
         self.is_charging = 1
         self.voltage_threshold = 1
+        self.epsilon_delta = epsilon_delta
+        self.discharging_threshold = 2 * (self.voltage_threshold / 3)
+        self.charging_threshold = self.discharging_threshold - epsilon_delta
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
         if phrase_duration == "distribution":

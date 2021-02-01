@@ -22,6 +22,7 @@ NUM_AGENTS = "num_agents"
 STEPS = "steps"
 KS = "k"
 TRIALS = "trials"
+E_DELTAS = "epsilon_deltas"
 BETAS = "betas"
 DBS = "databases"
 PHRASE_DURATIONS = "phrases"
@@ -52,20 +53,16 @@ def main():
         parser.add_argument("--length", "-l", type=int, required=True)
         parser.add_argument("--trials", "-t", type=int, required=True)
         parser.add_argument("--beta_range", "-b", type=float, nargs='+', required=False)
+        parser.add_argument("--epsilon_delta_range", "-e", type=float, nargs='+', required=False)
         parser.add_argument('--obstacles', dest='obstacles', action='store_true')
         parser.set_defaults(obstacles=False)
         args = parser.parse_args()
-        if args.beta_range is not None:
-            betas = [float(b) for b in args.beta_range]
-            if len(betas) == 1:
-                beta_range = betas
-            else:
-                beta_range = np.arange(betas[0], betas[1], 0.01)
-        else:
-            beta_range = None
+        beta_range = extract_range(args.beta_range)
+        epsilon_deltas = extract_range(args.epsilon_delta_range)
         use_obstacles = args.obstacles
         num_list = [int(num) for num in args.num]
-        params = set_constants(nao=num_list, sc=args.steps, sl=args.length, nt=args.trials, betas=beta_range)
+        params = set_constants(nao=num_list, sc=args.steps, sl=args.length, nt=args.trials, betas=beta_range,
+                               epsilon_deltas=epsilon_deltas)
 
         simulations = setup_simulations(params, use_obstacles=use_obstacles)
         experiment_results = run_simulations(simulations, use_processes=True)
@@ -87,6 +84,19 @@ def main():
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
     print("done")
+
+
+def extract_range(arglist):
+    """Process argument list. Arglist can either be empty, one value, or two values constituting a min-max range."""
+    if arglist is not None:
+        float_args = [float(a) for a in arglist]
+        if len(float_args) == 1:
+            retlist = float_args
+        else:
+            retlist = np.arange(float_args[0], float_args[1], 0.01)
+    else:
+        retlist = None
+    return retlist
 
 
 def process_json_db(program_argv, experiment_results):
@@ -172,7 +182,7 @@ def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experim
     return dummy_simulation
 
 
-def set_constants(sl=None, sc=None, nao=None, nt=None, betas=None):
+def set_constants(sl=None, sc=None, nao=None, nt=None, betas=None, epsilon_deltas=None):
     if not sl:
         side_length = 16
     else:
@@ -193,6 +203,10 @@ def set_constants(sl=None, sc=None, nao=None, nt=None, betas=None):
         btas = [0.2]
     else:
         btas = betas
+    if epsilon_deltas is None:
+        epdeltas = [0.333333]
+    else:
+        epdeltas = epsilon_deltas
     params = {}
     thetastars = [2 * math.pi]
     inter_burst_intervals = [1.57]  # radians / sec
@@ -206,6 +220,7 @@ def set_constants(sl=None, sc=None, nao=None, nt=None, betas=None):
     params[STEPS] = step_count
     params[KS] = coupling_strengths
     params[TRIALS] = num_trials
+    params[E_DELTAS] = epdeltas
     return params
 
 
@@ -289,23 +304,25 @@ def setup_simulations(params, use_obstacles=False):
         for num_agents in params[NUM_AGENTS]:
             for coupling_strength in params[KS]:
                 for Tb in params[TBS]:
-                    for beta in params[BETAS]:
-                        for phrase_duration in params[PHRASE_DURATIONS]:
-                            for trial in range(0, params[TRIALS]):
-                                n = params[NS]
-                                step_count = params[STEPS]
-                                simulation = Simulation.Simulation(num_agents=num_agents,
-                                                                   side_length=n,
-                                                                   step_count=step_count,
-                                                                   thetastar=thetastar,
-                                                                   coupling_strength=coupling_strength,
-                                                                   Tb=Tb,
-                                                                   beta=beta,
-                                                                   phrase_duration=phrase_duration,
-                                                                   r_or_u="random",
-                                                                   use_obstacles=use_obstacles,
-                                                                   use_kuramato=USE_KURAMATO)
-                                simulations.append(simulation)
+                    for epsilon_delta in params[E_DELTAS]:
+                        for beta in params[BETAS]:
+                            for phrase_duration in params[PHRASE_DURATIONS]:
+                                for trial in range(0, params[TRIALS]):
+                                    n = params[NS]
+                                    step_count = params[STEPS]
+                                    simulation = Simulation.Simulation(num_agents=num_agents,
+                                                                       side_length=n,
+                                                                       step_count=step_count,
+                                                                       thetastar=thetastar,
+                                                                       coupling_strength=coupling_strength,
+                                                                       Tb=Tb,
+                                                                       beta=beta,
+                                                                       phrase_duration=phrase_duration,
+                                                                       epsilon_delta=epsilon_delta,
+                                                                       r_or_u="random",
+                                                                       use_obstacles=use_obstacles,
+                                                                       use_kuramato=USE_KURAMATO)
+                                    simulations.append(simulation)
     return simulations
 
 
