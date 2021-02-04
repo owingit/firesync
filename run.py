@@ -3,6 +3,7 @@ import math
 import networkx as nx
 import os
 import sys
+import pickle
 import csv
 import numpy as np
 from datetime import datetime
@@ -35,6 +36,7 @@ DISTANCE_KEY = 'distances'
 USE_KURAMATO = False
 DUMP_DATA = True
 DO_PLOTTING = True
+DUMP_PICKLES = True
 
 
 def main():
@@ -68,6 +70,10 @@ def main():
         experiment_results = run_simulations(simulations, use_processes=True)
         if DUMP_DATA:
             write_results(experiment_results, now)
+        if DUMP_PICKLES:
+            plotter = sp.Plotter(experiment_results, now)
+            plotter.plot_quiet_period_distributions(on_betas=True,
+                                                    path='data/raw_experiment_results/2_3_moretrials/01ff')
 
     # or run the default settings
     else:
@@ -80,7 +86,7 @@ def main():
         plotter = sp.Plotter(experiment_results, now)
         # plotter.plot_example_animations()
         # plotter.compare_obstacles_vs_no_obstacles()
-        plotter.plot_quiet_period_distributions(on_betas=False)
+        plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
     print("done")
@@ -115,8 +121,8 @@ def process_json_db(program_argv, experiment_results):
                 if raw_experiment_results:
                     experiment_results.update(
                         process_results_from_written_file(raw_experiment_results, obstacle_flag))
-                else:
-                    raise TypeError("json data expected!")
+                # else:
+                #     raise TypeError("json data expected!")
         else:
             obstacle_flag = False
             if 'obstacles' in db:
@@ -242,14 +248,14 @@ def write_results(experiment_results, now):
                 dict_to_dump[name].append({
                     TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
                     FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
-                    DISTANCE_KEY: experiment.distance_statistics,
+                    # DISTANCE_KEY: experiment.distance_statistics,
                     OBSTACLE_KEY: obs
                 })
             else:
                 dict_to_dump[name] = [{
                     TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
                     FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
-                    DISTANCE_KEY: experiment.distance_statistics,
+                    # DISTANCE_KEY: experiment.distance_statistics,
                     OBSTACLE_KEY: obs
                 }]
             if write_networks:
@@ -301,7 +307,11 @@ def setup_simulations(params, use_obstacles=False):
     and add to the combinatorics by iterating through each of those as well.
 
     """
-    simulations = []
+    simulations = generate_simulations(params, use_obstacles)
+    return simulations
+
+
+def generate_simulations(params, use_obstacles):
     for thetastar in params[TSTARS]:
         for num_agents in params[NUM_AGENTS]:
             for coupling_strength in params[KS]:
@@ -324,8 +334,7 @@ def setup_simulations(params, use_obstacles=False):
                                                                        r_or_u="random",
                                                                        use_obstacles=use_obstacles,
                                                                        use_kuramato=USE_KURAMATO)
-                                    simulations.append(simulation)
-    return simulations
+                                    yield simulation
 
 
 def run_simulations(simulations, use_processes=True):

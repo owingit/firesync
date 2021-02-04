@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import math
 import random
 import csv
+import pickle
 
 from bokeh.io import output_file, show
 from bokeh.models import Ellipse, GraphRenderer, StaticLayoutProvider
@@ -12,6 +13,7 @@ from bokeh.palettes import Spectral8
 from bokeh.plotting import figure
 import sklearn
 from sklearn.neighbors import KernelDensity
+
 
 TSTAR_RANGE = 100
 
@@ -150,3 +152,36 @@ def get_kde():
     plt.fill_between(x_d, numpy.exp(logprob), alpha=0.5)
     plt.plot(t_d, numpy.full_like(t_d, -0.01), '|k', markeredgewidth=1)
     # plt.ylim(0, 0.03)
+
+
+def calc_means_stds(interburst_interval_distribution, swarm_interburst_interval_distribution, on_betas=False):
+        individual_dicts = [vals for vals in interburst_interval_distribution.values()]
+        i_d = {list(individual_dicts[i].keys())[0]: list(individual_dicts[i].values())
+               for i in range(len(individual_dicts))}
+        keys = i_d.keys()
+        individual_means = {k: 0 for k in keys}
+        individual_stds = {k: 0 for k in keys}
+        for key in keys:
+            lvals = [value for list_of_vals in i_d[key] for vals in list_of_vals for value in vals]
+            if len(lvals) > 0:
+                individual_means[key] = numpy.mean(lvals)
+                individual_stds[key] = numpy.std(lvals)
+            else:
+                individual_means[key] = 'No distribution found'
+                individual_stds[key] = 'No distribution found'
+        swarm_dicts = [v for v in swarm_interburst_interval_distribution.values()]
+        s_d = {list(swarm_dicts[i].keys())[0]: list(swarm_dicts[i].values())
+               for i in range(len(swarm_dicts))}
+        keys = s_d.keys()
+        swarm_means = {k: 0 for k in keys}
+        swarm_stds = {k: 0 for k in keys}
+        for key in keys:
+            lvals = [s_value for s_list_of_vals in s_d[key] for s_vals in s_list_of_vals for s_value in s_vals]
+            if len(lvals) > 0:
+                swarm_means[key] = numpy.mean(lvals)
+                swarm_stds[key] = numpy.std(lvals)
+            else:
+                swarm_means[key] = 'No distribution found'
+                swarm_stds[key] = 'No distribution found'
+
+        return swarm_means, swarm_stds, individual_means, individual_stds

@@ -4,6 +4,8 @@ import numpy as np
 import random
 from scipy.interpolate import make_interp_spline
 import math
+import simulation_helpers
+import pickle
 from scipy.stats import norm
 
 
@@ -11,10 +13,8 @@ class Plotter:
     def __init__(self, experiment_results, now):
         self.experiment_results = experiment_results
         self.now = now
-        name = list(self.experiment_results.keys())[0]
-        self.step_count = self.experiment_results[name][0].steps
 
-    def plot_quiet_period_distributions(self, on_betas=False):
+    def plot_quiet_period_distributions(self, on_betas=False, path=None):
         interburst_interval_distribution = {}
         swarm_interburst_interval_distribution = {}
         ob_interburst_interval_distribution = {}
@@ -56,57 +56,32 @@ class Plotter:
                     else:
                         swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
 
-        if len(ob_interburst_interval_distribution.items()) > 0:
-            s_means, s_stds, i_means, i_stds = self.calc_means_stds(ob_interburst_interval_distribution,
-                                                                    ob_swarm_interburst_interval_distribution,
-                                                                    on_betas=on_betas)
-            self._plot_histograms(ob_interburst_interval_distribution,
-                                  ob_swarm_interburst_interval_distribution,
-                                  on_betas=on_betas)
-            self._plot_all_histograms(ob_interburst_interval_distribution,
-                                      ob_swarm_interburst_interval_distribution,
-                                      obs=True, on_betas=on_betas)
-        else:
-            s_means, s_stds, i_means, i_stds = self.calc_means_stds(interburst_interval_distribution,
-                                                                    swarm_interburst_interval_distribution,
-                                                                    on_betas=on_betas)
-            self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
-                                  on_betas=on_betas)
-            self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
-                                      on_betas=on_betas)
+        with open(path+'/beta_sweep_individual.pickle', 'wb') as f_i:
+            print('pickling {}+beta_sweep_individual.pickle...'.format(path))
+            pickle.dump(interburst_interval_distribution, f_i)
+        with open(path+'/beta_sweep_swarm.pickle', 'wb') as f_s:
+            print('pickling {}+beta_sweep_swarm.pickle...'.format(path))
+            pickle.dump(swarm_interburst_interval_distribution, f_s)
 
-    @staticmethod
-    def calc_means_stds(interburst_interval_distribution, swarm_interburst_interval_distribution, on_betas=False):
-        individual_dicts = [vals for vals in interburst_interval_distribution.values()]
-        i_d = {list(individual_dicts[i].keys())[0]: list(individual_dicts[i].values())
-               for i in range(len(individual_dicts))}
-        keys = i_d.keys()
-        individual_means = {k: 0 for k in keys}
-        individual_stds = {k: 0 for k in keys}
-        for key in keys:
-            lvals = [value for list_of_vals in i_d[key] for vals in list_of_vals for value in vals]
-            if len(lvals) > 0:
-                individual_means[key] = np.mean(lvals)
-                individual_stds[key] = np.std(lvals)
-            else:
-                individual_means[key] = 'No distribution found'
-                individual_stds[key] = 'No distribution found'
-        swarm_dicts = [v for v in swarm_interburst_interval_distribution.values()]
-        s_d = {list(swarm_dicts[i].keys())[0]: list(swarm_dicts[i].values())
-               for i in range(len(swarm_dicts))}
-        keys = s_d.keys()
-        swarm_means = {k: 0 for k in keys}
-        swarm_stds = {k: 0 for k in keys}
-        for key in keys:
-            lvals = [s_value for s_list_of_vals in s_d[key] for s_vals in s_list_of_vals for s_value in s_vals]
-            if len(lvals) > 0:
-                swarm_means[key] = np.mean(lvals)
-                swarm_stds[key] = np.std(lvals)
-            else:
-                swarm_means[key] = 'No distribution found'
-                swarm_stds[key] = 'No distribution found'
-
-        return swarm_means, swarm_stds, individual_means, individual_stds
+        # using pickle plotter right now
+        # if len(ob_interburst_interval_distribution.items()) > 0:
+        #     # s_means, s_stds, i_means, i_stds = self.calc_means_stds(ob_interburst_interval_distribution,
+        #     #                                                         ob_swarm_interburst_interval_distribution,
+        #     #                                                         on_betas=on_betas)
+        #     self._plot_histograms(ob_interburst_interval_distribution,
+        #                           ob_swarm_interburst_interval_distribution,
+        #                           on_betas=on_betas)
+        #     self._plot_all_histograms(ob_interburst_interval_distribution,
+        #                               ob_swarm_interburst_interval_distribution,
+        #                               obs=True, on_betas=on_betas)
+        # else:
+        #     # s_means, s_stds, i_means, i_stds = self.calc_means_stds(interburst_interval_distribution,
+        #     #                                                         swarm_interburst_interval_distribution,
+        #     #                                                         on_betas=on_betas)
+        #     self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
+        #                           on_betas=on_betas)
+        #     self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
+        #                               on_betas=on_betas)
 
     @staticmethod
     def _plot_all_histograms(individual, group, obs=False, on_betas=False):
@@ -147,11 +122,10 @@ class Plotter:
                                 xs.append(element)
                     y, bin_edges = np.histogram(xs, bins=bin_count, density=True)
                     ys = [height for height in y]
-                    normed_ys = [float(x) / sum(ys) for x in ys]
                     bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
                     if niceify:
                         x_nice = np.linspace(min(bin_centers), max(bin_centers), 300)
-                        _nice = make_interp_spline(bin_centers, normed_ys)
+                        _nice = make_interp_spline(bin_centers, ys)
                         y_nice = _nice(x_nice)
                         y_np = np.asarray(y_nice)
                         low_values_flags = y_np < 0.0  # Where values are low
@@ -159,7 +133,7 @@ class Plotter:
                         ax.plot(x_nice, y_nice, label='{}_{}_{}_pts'.format(k, independent_var, len(xs)),
                                 color=colors[colorindex],)
                     else:
-                        ax.plot(bin_centers, normed_ys, label='{}_{}_{}_pts'.format(k, independent_var, len(xs)),
+                        ax.plot(bin_centers, ys, label='{}_{}_{}_pts'.format(k, independent_var, len(xs)),
                                 color=colors[colorindex])
                     colorindex += 1
 
@@ -177,10 +151,11 @@ class Plotter:
                 plt.clf()
                 plt.close()
 
-    def _plot_histograms(self, individual, group, on_betas=False):
-        s_means, s_stds, i_means, i_stds = self.calc_means_stds(individual,
-                                                                group,
-                                                                on_betas=on_betas)
+    @staticmethod
+    def _plot_histograms(individual, group, on_betas=False):
+        s_means, s_stds, i_means, i_stds = simulation_helpers.calc_means_stds(individual,
+                                                                              group,
+                                                                              on_betas=on_betas)
         if not on_betas:
             independent_var = 'ff'
         else:
@@ -233,11 +208,11 @@ class Plotter:
                         mean,
                         std
                         ))
-                    plt.savefig('histograms/{}_interburst_distributions_{}{}_{}_steps.png'.format(
+                    plt.savefig('histograms/{}_interburst_distributions_{}{}.png'.format(
                         string,
                         k,
-                        independent_var,
-                        self.step_count))
+                        independent_var
+                    ))
                     plt.clf()
                     plt.close()
 
@@ -254,11 +229,13 @@ class Plotter:
 
     def compare_obstacles_vs_no_obstacles(self):
         """Plot obstacle simulations against no obstacles."""
+        name = list(self.experiment_results.keys())[0]
+        step_count = self.experiment_results[name][0].steps
         obstacle_simulations = []
         non_obstacle_simulations = []
         value = list(self.experiment_results.values())[0][0]
         num_agents = value.total_agents
-        steps = self.step_count
+        steps = step_count
         bursts_axis = plt.axes(xlim=(0, steps), ylim=(0, num_agents))
         show = False
         write = True
@@ -286,7 +263,9 @@ class Plotter:
 
     def plot_mean_vector_length_results(self):
         """Directly plot statistical results from a simulation."""
-        ax = plt.axes(xlim=(0, self.step_count + 1), ylim=(0, 1.05))
+        name = list(self.experiment_results.keys())[0]
+        step_count = self.experiment_results[name][0].steps
+        ax = plt.axes(xlim=(0, step_count + 1), ylim=(0, 1.05))
         ax.set_xlabel('Step')
         ax.set_ylabel('Mean resultant vector length')
         for identifier, simulations in self.experiment_results.items():

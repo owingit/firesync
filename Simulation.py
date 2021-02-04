@@ -72,21 +72,27 @@ class Simulation:
 
         # network stuff
         self.use_networks = False
-        self.delta_t = 10 * [ff.charging_time + ff.discharging_time for ff in [self.firefly_array[0]]][0]
-        self.delta_x = {}
-        self.connection_probability = None
-        self.cascade_networks = {}
-        self.indices_in_cascade_ = {}
-        self.networks_in_cascade_ = {}
-        self.connected_temporal_networks = {}
+
+        if self.use_networks:
+            self.delta_t = 10 * [ff.charging_time + ff.discharging_time for ff in [self.firefly_array[0]]][0]
+            self.delta_x = {}
+            self.connection_probability = None
+            self.cascade_networks = {}
+            self.indices_in_cascade_ = {}
+            self.networks_in_cascade_ = {}
+            self.connected_temporal_networks = {}
 
         if self.use_obstacles:
             self.boilerplate = self.boilerplate + '_obstacles'
-        # statistics reporting
-        self.num_fireflies_with_phase_x = collections.OrderedDict()
-        self.mean_resultant_vector_length = collections.OrderedDict()
-        self.wave_statistics = collections.OrderedDict()
-        self.distance_statistics = collections.OrderedDict()
+
+        # statistics reporting (used with Kuramato)
+        if self.use_kuramato:
+            self.num_fireflies_with_phase_x = collections.OrderedDict()
+            self.mean_resultant_vector_length = collections.OrderedDict()
+            self.wave_statistics = collections.OrderedDict()
+
+        # not used right now
+        # self.distance_statistics = collections.OrderedDict()
         self.init_stats()
 
     def init_obstacles(self):
@@ -97,16 +103,17 @@ class Simulation:
 
     def init_stats(self):
         """Initialize per-timestep dictionaries tracking firefly phase and TODO: more things."""
-        for i in range(self.steps):
-            self.num_fireflies_with_phase_x[i] = {key: 0 for key in range(0, 360)}
-            self.wave_statistics[i] = {}
+        if self.use_kuramato:
+            for i in range(self.steps):
+                self.num_fireflies_with_phase_x[i] = {key: 0 for key in range(0, 360)}
+                self.wave_statistics[i] = {}
 
         # list of x,y coordinates that flashed at time t
-        for t in range(self.steps):
-            self.distance_statistics[t] = {}
+        # for t in range(self.steps):
+        #     self.distance_statistics[t] = {}
+        # self.distance_statistics[0] = {'length': len(initial_flashers),
+        #                                'positions': initial_flashers}
         initial_flashers = [(ff.positionx[0], ff.positiony[0]) for ff in self.firefly_array if ff.flashed_at_this_step[0]]
-        self.distance_statistics[0] = {'length': len(initial_flashers),
-                                       'positions': initial_flashers}
 
         if self.use_networks:
             centroid = None
@@ -178,8 +185,8 @@ class Simulation:
             flashers_at_time_t = [(ff.positionx[step], ff.positiony[step], ff.number)
                                   for ff in self.firefly_array if ff.flashed_at_this_step[step]]
 
-            self.distance_statistics[step] = {'length': len(flashers_at_time_t),
-                                              'positions': flashers_at_time_t}
+            # self.distance_statistics[step] = {'length': len(flashers_at_time_t),
+            #                                   'positions': flashers_at_time_t}
             if self.use_networks:
                 self.cascade_logic(step)
 
