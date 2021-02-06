@@ -70,10 +70,10 @@ def main():
         experiment_results = run_simulations(simulations, use_processes=True)
         if DUMP_DATA:
             write_results(experiment_results, now)
-        if DUMP_PICKLES:
-            plotter = sp.Plotter(experiment_results, now)
-            plotter.plot_quiet_period_distributions(on_betas=True,
-                                                    path='data/raw_experiment_results/2_3_moretrials/01ff')
+        # if DUMP_PICKLES:
+        #     plotter = sp.Plotter(experiment_results, now)
+        #     plotter.plot_quiet_period_distributions(on_betas=True,
+        #                                             path='data/raw_experiment_results/2_3_moretrials/01ff')
 
     # or run the default settings
     else:
@@ -84,9 +84,9 @@ def main():
             write_results(experiment_results, now)
     if DO_PLOTTING:
         plotter = sp.Plotter(experiment_results, now)
-        # plotter.plot_example_animations()
+        plotter.plot_example_animations()
         # plotter.compare_obstacles_vs_no_obstacles()
-        plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
+        # plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
     print("done")

@@ -11,11 +11,26 @@ from scipy.stats import kurtosis
 from scipy.stats import skew
 
 
-def pickle_plotter(data_path):
-    with open(data_path+'beta_sweep_individual.pickle', 'rb') as f_i:
-        individual = pickle.load(f_i)
+def pickle_plotter(data_path, other_path=None):
+    # with open(data_path+'beta_sweep_individual.pickle', 'rb') as f_i:
+    #     individual = pickle.load(f_i)
+    # toggle
+    individual = None
     with open(data_path+'beta_sweep_swarm.pickle', 'rb') as f_g:
         group = pickle.load(f_g)
+
+    if other_path is not None:
+        with open(data_path + 'beta_sweep_swarm_1.pickle', 'rb') as f_e:
+            more_group_data = pickle.load(f_e)
+        with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_e2:
+            extra_group_data = pickle.load(f_e2)
+        for key in group.keys():
+            for k in group[key].keys():
+                for l in more_group_data[key][k]:
+                    group[key][k].append(l)
+                for l2 in extra_group_data[key][k]:
+                    group[key][k].append(l2)
+
     ff_count = data_path.split('ff')[0][-2:]
 
     beta_dict = beta_plotter(individual=individual,
@@ -40,7 +55,7 @@ def plot_ks_statistic(beta_dict, ff_count, data_path):
     ax.set_ylabel('K-S Test Difference')
     to_plot_swarm_stats = {}
     to_plot_swarm_ps = {}
-    swarm_beta_dict = beta_dict[1]
+    swarm_beta_dict = beta_dict[0] # [1]
 
     # to_plot_individual_stats = {}
     # to_plot_individual_ps = {}
@@ -77,7 +92,8 @@ def plot_ks_statistic(beta_dict, ff_count, data_path):
 
 def beta_plotter(individual, group, data_path, ff_count):
     independent_var = 'beta_{}ff'.format(ff_count)
-    dicts = [individual, group]
+    # dicts = [individual, group] #toggle
+    dicts = [group]
     beta_dict = {}
     for i, d in enumerate(dicts):
         beta_dict[i] = {}
@@ -85,29 +101,32 @@ def beta_plotter(individual, group, data_path, ff_count):
             fig, ax = plt.subplots()
             ax.set_xlabel('Interburst interval [s]')
             ax.set_ylabel('Freq count')
-            ax.set_xlim(0, 100)
+            ax.set_xlim(left=0, right=120)
             exp_x, exp_y = plot_experimental_data(ax, data_path=data_path, ff_count=ff_count, plot=True)
             # the_x, the_y = plot_theoretical_data(ax, data_path=data_path, ff_count=ff_count, plot=True)
             beta = round(float(identifier.split('beta')[0].split('density')[1]), 4)
             _iids = []
             for k, iid_list in results.items():
                 _iids.extend([x / 10 for iid in iid_list for x in iid])
-            iids = [iid for iid in _iids if iid > 3]
+            iids = [iid for iid in _iids if iid > 4]
             beta_dict[i][beta] = iids
             mean = round(float(np.mean(iids)), 4)
             std = round(float(np.std(iids)), 4)
             if ff_count == '01':
-                ax.set_xlim(0, 500)
                 bins = 50
             else:
-                bins = 20
+                bins = 50
+
+            # ccdfx, ccdfy = ccdf(np.array(iids))
             ys, bin_edges = np.histogram(iids, bins=bins, density=True)
             y_heights = [height for height in ys]
             bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+            # ax.plot(ccdfx, ccdfy, color='blue', label='sim')
             ax.plot(bin_centers, y_heights, color='blue', label='sim')
             # ax.hist(iids, density=True, bins=bins, color='cyan', edgecolor='black', label='sim')
             trials = len(iids)
-            if i == 0:
+            # toggle if i == 0:
+            if i != 0:
                 if trials > 1:
                     string = 'Individual_avg_over_' + str(trials) + '_{}mean_{}std'.format(mean, std)
                 else:
@@ -128,7 +147,7 @@ def beta_plotter(individual, group, data_path, ff_count):
                 std
             ))
             plt.legend()
-            plt.savefig('histograms/{}_interburst_distributions_compared_with_experiments_{}{}.png'.format(
+            plt.savefig('histograms/2_5/{}_interburst_dists_compared_w_experiments_{}{}.png'.format(
                 string,
                 beta,
                 independent_var
@@ -152,11 +171,14 @@ def plot_experimental_data(ax, data_path, ff_count, plot=False):
     if ff_count == '01':
         bins = 50
     else:
-        bins = 20
+        bins = 50
+
+    # ccdfx, ccdfy = ccdf(np.array(y))
     ys, bin_edges = np.histogram(y, bins=bins, density=True)
     y_heights = [height for height in ys]
     bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
     if plot:
+        # ax.plot(ccdfx, ccdfy, color='green', label='experimental')
         ax.plot(bin_centers, y_heights, color='green', label='experimental')
     return (bin_centers, ys), y
 
@@ -195,7 +217,7 @@ def pickle_beta_n_comparison(paths):
     comparison_dict = {}
     experimental_dict = {}
     for p in paths:
-        data_path = 'data_from_cluster/raw_experiment_results/2_3/' + p
+        data_path = 'data_from_cluster/raw_experiment_results/2_5/' + p
         ff_count = p.split('ff')[0]
         mean_exp, std_exp, skew_exp, kurtosis_exp, experimental_data = get_stats_from_experimental_data(
             data_path, ff_count)
@@ -203,6 +225,17 @@ def pickle_beta_n_comparison(paths):
         experimental_dict[ff_count] = (mean_exp, std_exp, skew_exp, kurtosis_exp)
         with open(data_path + 'beta_sweep_swarm.pickle', 'rb') as f_g:
             data = pickle.load(f_g)
+        with open(data_path + 'beta_sweep_swarm_1.pickle', 'rb') as f_g:
+            extra_data = pickle.load(f_g)
+        with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_g2:
+            extra_data_2 = pickle.load(f_g2)
+        for key in data.keys():
+            for k in data[key].keys():
+                for l in extra_data[key][k]:
+                    data[key][k].append(l)
+                for l2 in extra_data_2[key][k]:
+                    data[key][k].append(l2)
+
         for identifier, results in data.items():
             beta = round(float(identifier.split('beta')[0].split('density')[1]), 4)
             _iids = []
@@ -254,11 +287,12 @@ def pickle_beta_n_comparison(paths):
     ax.plot(list(to_plot.keys()), list(to_plot.values()), label='Best beta')
     ax.set_xlabel('N')
     ax.set_ylabel('Beta')
-    plt.show()
+    plt.savefig('histograms/2_5/Beta_vs_N.png')
 
 
 def main():
-    data_path_preamble = 'data_from_cluster/raw_experiment_results/2_3/'
+    data_path_preamble = 'data_from_cluster/raw_experiment_results/2_5/'
+    extra_data_preamble = 'data_from_cluster/raw_experiment_results/2_3_moretrials/'
     paths = ['01ff/',
              '05ff/',
              '10ff/',
@@ -266,9 +300,22 @@ def main():
              '20ff/']
 
     data_paths = [data_path_preamble + '{}'.format(i) for i in paths]
+    other_paths = [extra_data_preamble + '{}'.format(i) for i in paths]
     pickle_beta_n_comparison(paths)
-    for data_path in data_paths:
-        pickle_plotter(data_path)
+    for data_path, other_path in zip(data_paths, other_paths):
+        pickle_plotter(data_path, other_path)
+
+
+def cdf(a):
+    X = np.sort(np.array(a))
+    Y = np.array(range(a.size)) / float(a.size)
+    return X, Y
+
+
+def ccdf(a):
+    X = np.sort(np.array(a))
+    Y = (np.full(a.shape, fill_value=a.size) - np.array(range(a.size))) / float(a.size)
+    return X, Y
 
 
 if __name__ == '__main__':

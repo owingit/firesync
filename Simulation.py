@@ -212,11 +212,17 @@ class Simulation:
 
             # update epsilon to discharging (V is high enough)
             if ff_i.voltage_instantaneous[step - 1] >= ff_i.discharging_threshold:
-                if len(ff_i.ends_of_bursts) == 0:
+                # if ff_i.is_charging == 0 and ff_i.ready:
+                #     ff_i.flash(step)
+                if ff_i.in_burst is False and len(ff_i.ends_of_bursts) == 0:
                     # this is the "waited enough time" step
                     ff_i.set_ready()
-                elif len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
+                elif ff_i.in_burst is False and len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
                     ff_i.set_ready()
+                elif ff_i.in_burst is True and step - ff_i.last_flashed_at > (ff_i.discharging_time + ff_i.charging_time):
+                    ff_i.set_ready()
+                else:
+                    ff_i.unset_ready()
                 if ff_i.ready:
                     ff_i.is_charging = 0
 
@@ -229,6 +235,13 @@ class Simulation:
                     ff_i.set_ready()
                 if len(ff_i.ends_of_bursts) == 0 and not ff_i.flashed_at_this_step[step]:
                     ff_i.set_ready()
+
+            if ff_i.is_charging == 0 and ff_i.ready:
+                ff_i.flash(step)
+                ff_i.is_charging = 1
+
+            elif ff_i.in_burst is True and step - ff_i.last_flashed_at > (ff_i.discharging_time + ff_i.charging_time):
+                ff_i.flash(step)
 
     def update_voltages(self, step):
         influential_neighbors = {}
@@ -473,7 +486,7 @@ class Simulation:
             ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
             bursts_at_each_timestep = self.get_burst_data()
             ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()),
-                    label=label, color=color)
+                    label=label, color=color, lw=1)
 
             ax.set_xlim([0.0, self.steps])
             ax.set_xlabel('Step')

@@ -55,13 +55,14 @@ class Firefly:
 
         # integrate and fire params
         self.beta = beta
-        self.charging_time = np.random.normal(loc=1.1, scale=0.3)
-        self.discharging_time = np.random.normal(loc=4.5, scale=1)
+        self.charging_time = np.random.normal(loc=1.1, scale=0.3) + 0.01
+        self.discharging_time = np.random.normal(loc=4.5, scale=1) + 0.01
         self.is_charging = 1
         self.voltage_threshold = 1
         self.epsilon_delta = epsilon_delta
         self.discharging_threshold = 2 * (self.voltage_threshold / 3)
         self.charging_threshold = self.discharging_threshold - epsilon_delta
+        self.in_burst = False
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
         if phrase_duration == "distribution":
@@ -72,6 +73,7 @@ class Firefly:
 
         self.flashes_per_burst = int(np.random.normal(loc=4, scale=1.2))
         self.flashes_left_in_current_burst = self.flashes_per_burst
+        self.last_flashed_at = 0
         self.quiet_period = self.phrase_duration - (
                  (self.charging_time + self.discharging_time) * self.flashes_per_burst
         )
@@ -189,9 +191,12 @@ class Firefly:
             self.direction[current_step] = -self.direction[current_step]
 
     def flash(self, t):
+        self.last_flashed_at = t
         self.flashed_at_this_step[t] = True
         self.flashes_left_in_current_burst -= 1
+        self.in_burst = True
         if self.flashes_left_in_current_burst == 0:
+            self.in_burst = False
             self.unset_ready()
             self.flashes_left_in_current_burst = self.flashes_per_burst
             self.ends_of_bursts.append(t)

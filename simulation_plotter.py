@@ -223,9 +223,9 @@ class Plotter:
                 if simulation.use_kuramato:
                     simulation.animate_phase_bins(self.now, show_gif=False, write_gif=True)
             for i, simulation in enumerate(simulation_list):
-                if simulation.total_agents == 1:
+                # if simulation.total_agents == 1:
                 #   simulation.animate_walk(self.now, show_gif=False, write_gif=True)
-                    simulation.plot_bursts(self.now, instance=i, show_gif=False, write_gif=True)
+                    simulation.plot_bursts(self.now, instance=i, show_gif=True, write_gif=True)
 
     def compare_obstacles_vs_no_obstacles(self):
         """Plot obstacle simulations against no obstacles."""
