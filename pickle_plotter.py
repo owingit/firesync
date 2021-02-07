@@ -147,7 +147,7 @@ def beta_plotter(individual, group, data_path, ff_count):
                 std
             ))
             plt.legend()
-            plt.savefig('histograms/2_5/{}_interburst_dists_compared_w_experiments_{}{}.png'.format(
+            plt.savefig('histograms/2_6/{}_interburst_dists_compared_w_experiments_{}{}.png'.format(
                 string,
                 beta,
                 independent_var
@@ -217,7 +217,7 @@ def pickle_beta_n_comparison(paths):
     comparison_dict = {}
     experimental_dict = {}
     for p in paths:
-        data_path = 'data_from_cluster/raw_experiment_results/2_5/' + p
+        data_path = 'data_from_cluster/raw_experiment_results/2_6/' + p
         ff_count = p.split('ff')[0]
         mean_exp, std_exp, skew_exp, kurtosis_exp, experimental_data = get_stats_from_experimental_data(
             data_path, ff_count)
@@ -287,13 +287,14 @@ def pickle_beta_n_comparison(paths):
     ax.plot(list(to_plot.keys()), list(to_plot.values()), label='Best beta')
     ax.set_xlabel('N')
     ax.set_ylabel('Beta')
-    plt.savefig('histograms/2_5/Beta_vs_N.png')
+    plt.savefig('histograms/2_6/Beta_vs_N.png')
 
 
 def main():
-    data_path_preamble = 'data_from_cluster/raw_experiment_results/2_5/'
+    data_path_preamble = 'data_from_cluster/raw_experiment_results/2_6/'
     extra_data_preamble = 'data_from_cluster/raw_experiment_results/2_3_moretrials/'
-    paths = ['01ff/',
+    paths = [
+           # '01ff/',
              '05ff/',
              '10ff/',
              '15ff/',

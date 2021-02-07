@@ -110,13 +110,13 @@ def cluster_indices(label, labels):
     return numpy.where(labels == label)[0]
 
 
-def get_initial_distribution():
+def get_initial_distribution(limit):
     with open('data/ib01ff.csv', newline='') as f:
         reader = csv.reader(f)
         data = list(reader)
 
     good_data = [float(d[0]) for d in data]
-    trimmed_data = [d * 10 for d in good_data if d > 3.0]
+    trimmed_data = [d * 10 for d in good_data if d > (limit / 10)]
     return trimmed_data
 
 

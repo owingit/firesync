@@ -1,5 +1,6 @@
 *.pdf
 images/*
+*.png
 data/*
 data_from_cluster/*
 histograms/*

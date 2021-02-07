@@ -65,8 +65,11 @@ class Firefly:
         self.in_burst = False
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
+        self.flashes_per_burst = int(np.random.normal(loc=4, scale=1.2))
         if phrase_duration == "distribution":
-            self.phrase_duration = random.choice(simulation_helpers.get_initial_distribution())
+            self.phrase_duration = random.choice(simulation_helpers.get_initial_distribution(
+                limit=(2 * (self.charging_time + self.discharging_time) * self.flashes_per_burst))
+            )
             # np.random.uniform(50, 1200, size=1)
         else:
             self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
@@ -100,7 +103,8 @@ class Firefly:
 
     def update_phrase_duration(self, fastest_phrase=None):
         if fastest_phrase is None:
-            self.phrase_duration = random.choice(simulation_helpers.get_initial_distribution())
+            self.phrase_duration = random.choice(simulation_helpers.get_initial_distribution(
+                limit=(2 * (self.charging_time + self.discharging_time) * self.flashes_per_burst)))
         else:
             self.phrase_duration = fastest_phrase
         self.update_quiet_period()

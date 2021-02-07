@@ -35,7 +35,7 @@ DISTANCE_KEY = 'distances'
 
 USE_KURAMATO = False
 DUMP_DATA = True
-DO_PLOTTING = True
+DO_PLOTTING = False
 DUMP_PICKLES = True
 
 
