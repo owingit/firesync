@@ -22,14 +22,14 @@ def pickle_plotter(data_path, other_path=None):
     if other_path is not None:
         with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_e:
             more_group_data = pickle.load(f_e)
-        # with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_e2:
-        #     extra_group_data = pickle.load(f_e2)
+        with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_e2:
+            extra_group_data = pickle.load(f_e2)
         for key in group.keys():
             for k in group[key].keys():
                 for l in more_group_data[key][k]:
                     group[key][k].append(l)
-                # for l2 in extra_group_data[key][k]:
-                #     group[key][k].append(l2)
+                for l2 in extra_group_data[key][k]:
+                    group[key][k].append(l2)
 
     ff_count = data_path.split('ff')[0][-2:]
 
@@ -229,17 +229,17 @@ def pickle_beta_n_comparison(paths, extra=True):
         if extra:
             with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_g:
                 extra_data = pickle.load(f_g)
-            # with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_g2:
-            #     extra_data_2 = pickle.load(f_g2)
+            with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_g2:
+                extra_data_2 = pickle.load(f_g2)
             for key in data.keys():
                 for k in data[key].keys():
                     for l in extra_data[key][k]:
                         data[key][k].append(l)
-                    # try:
-                    #     for l2 in extra_data_2[key][k]:
-                    #         data[key][k].append(l2)
-                    # except KeyError:
-                    #     print('what')
+                    try:
+                        for l2 in extra_data_2[key][k]:
+                            data[key][k].append(l2)
+                    except KeyError:
+                        print('what')
         beta_dict = {}
         for identifier, results in data.items():
             beta = round(float(identifier.split('beta')[0].split('density')[1]), 4)
