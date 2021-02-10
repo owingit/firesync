@@ -16,20 +16,20 @@ def pickle_plotter(data_path, other_path=None):
     #     individual = pickle.load(f_i)
     # toggle
     individual = None
-    with open(data_path+'beta_sweep_swarm.pickle', 'rb') as f_g:
+    with open(data_path+'beta_sweep_swarm_1.pickle', 'rb') as f_g:
         group = pickle.load(f_g)
 
     if other_path is not None:
-        with open(data_path + 'beta_sweep_swarm_1.pickle', 'rb') as f_e:
+        with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_e:
             more_group_data = pickle.load(f_e)
-        with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_e2:
-            extra_group_data = pickle.load(f_e2)
+        # with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_e2:
+        #     extra_group_data = pickle.load(f_e2)
         for key in group.keys():
             for k in group[key].keys():
                 for l in more_group_data[key][k]:
                     group[key][k].append(l)
-                for l2 in extra_group_data[key][k]:
-                    group[key][k].append(l2)
+                # for l2 in extra_group_data[key][k]:
+                #     group[key][k].append(l2)
 
     ff_count = data_path.split('ff')[0][-2:]
 
@@ -108,14 +108,14 @@ def beta_plotter(individual, group, data_path, ff_count):
             _iids = []
             for k, iid_list in results.items():
                 _iids.extend([x / 10 for iid in iid_list for x in iid])
-            iids = [iid for iid in _iids if iid > 4]
+            iids = [iid for iid in _iids if iid > 3]
             beta_dict[i][beta] = iids
             mean = round(float(np.mean(iids)), 4)
             std = round(float(np.std(iids)), 4)
             if ff_count == '01':
                 bins = 50
             else:
-                bins = 50
+                bins = 11
 
             # ccdfx, ccdfy = ccdf(np.array(iids))
             ys, bin_edges = np.histogram(iids, bins=bins, density=True)
@@ -147,7 +147,7 @@ def beta_plotter(individual, group, data_path, ff_count):
                 std
             ))
             plt.legend()
-            plt.savefig('histograms/2_6/{}_interburst_dists_compared_w_experiments_{}{}.png'.format(
+            plt.savefig('histograms/2_9/{}_interburst_dists_compared_w_experiments_{}{}.png'.format(
                 string,
                 beta,
                 independent_var
@@ -199,6 +199,7 @@ def plot_theoretical_data(ax, data_path, ff_count, plot=False):
 def get_stats_from_experimental_data(data_path, ff_count):
     x = []
     y = []
+    all_ys = []
     with open(data_path+'ib{}ff.csv'.format(ff_count), 'r') as csvfile:
         plots = csv.reader(csvfile, delimiter=',')
         for i, row in enumerate(plots):
@@ -213,35 +214,42 @@ def get_stats_from_experimental_data(data_path, ff_count):
     return mean, std, skewness, kurt, y
 
 
-def pickle_beta_n_comparison(paths):
+def pickle_beta_n_comparison(paths, extra=True):
     comparison_dict = {}
     experimental_dict = {}
     for p in paths:
-        data_path = 'data_from_cluster/raw_experiment_results/2_6/' + p
+        data_path = 'data_from_cluster/raw_experiment_results/2_9/' + p
         ff_count = p.split('ff')[0]
         mean_exp, std_exp, skew_exp, kurtosis_exp, experimental_data = get_stats_from_experimental_data(
             data_path, ff_count)
         comparison_dict[ff_count] = {}
         experimental_dict[ff_count] = (mean_exp, std_exp, skew_exp, kurtosis_exp)
-        with open(data_path + 'beta_sweep_swarm.pickle', 'rb') as f_g:
-            data = pickle.load(f_g)
         with open(data_path + 'beta_sweep_swarm_1.pickle', 'rb') as f_g:
-            extra_data = pickle.load(f_g)
-        with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_g2:
-            extra_data_2 = pickle.load(f_g2)
-        for key in data.keys():
-            for k in data[key].keys():
-                for l in extra_data[key][k]:
-                    data[key][k].append(l)
-                for l2 in extra_data_2[key][k]:
-                    data[key][k].append(l2)
-
+            data = pickle.load(f_g)
+        if extra:
+            with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_g:
+                extra_data = pickle.load(f_g)
+            # with open(data_path + 'beta_sweep_swarm_2.pickle', 'rb') as f_g2:
+            #     extra_data_2 = pickle.load(f_g2)
+            for key in data.keys():
+                for k in data[key].keys():
+                    for l in extra_data[key][k]:
+                        data[key][k].append(l)
+                    # try:
+                    #     for l2 in extra_data_2[key][k]:
+                    #         data[key][k].append(l2)
+                    # except KeyError:
+                    #     print('what')
+        beta_dict = {}
         for identifier, results in data.items():
             beta = round(float(identifier.split('beta')[0].split('density')[1]), 4)
             _iids = []
             for k, iid_list in results.items():
                 _iids.extend([x / 10 for iid in iid_list for x in iid])
+
             iids = [iid for iid in _iids if iid > 3]
+            if int(ff_count) == 20:
+                beta_dict[beta] = iids
             mean = round(float(np.mean(iids)), 4)
             std = round(float(np.std(iids)), 4)
             skewness = skew(iids)
@@ -281,30 +289,46 @@ def pickle_beta_n_comparison(paths):
 
     # use K-S right now
     to_plot = {}
+    ks = {}
     for key in results_dict:
-        to_plot[key] = results_dict[key]['ks'][0][0]
+        top = results_dict[key]['mean'][:1]
+        to_plot[key] = [ff[0] for ff in top]
+        _ks = [val[0] for val in results_dict[key]['ks'] if val[0] == top[0][0]][0]
+        ks[key] = _ks
     fig, ax = plt.subplots()
-    ax.plot(list(to_plot.keys()), list(to_plot.values()), label='Best beta')
+    for i in range(1):
+        vals_to_plot = list(to_plot.values())
+        y = [d[i] for d in vals_to_plot]
+        _ks = list(ks.values())
+        lower_bounds = [_y - (ksval/2) for _y, ksval in zip(y, _ks)]
+        upper_bounds = [_y + (ksval/2) for _y, ksval in zip(y, _ks)]
+        ax.plot(list(to_plot.keys()), y, label='β')
+        ax.fill_between(list(to_plot.keys()), lower_bounds, upper_bounds, color='green', alpha=0.2,
+                        label='Confidence interval from K-S test')
+
     ax.set_xlabel('N')
     ax.set_ylabel('Beta')
-    plt.savefig('histograms/2_6/Beta_vs_N.png')
+    plt.title('Best beta values from sweep 0-1')
+    plt.legend()
+    plt.savefig('histograms/2_9/Beta_vs_N.png')
 
 
 def main():
-    data_path_preamble = 'data_from_cluster/raw_experiment_results/2_6/'
+    data_path_preamble = 'data_from_cluster/raw_experiment_results/2_9/'
     extra_data_preamble = 'data_from_cluster/raw_experiment_results/2_3_moretrials/'
     paths = [
-           # '01ff/',
+             '01ff/',
              '05ff/',
              '10ff/',
              '15ff/',
-             '20ff/']
+             '20ff/'
+            ]
 
     data_paths = [data_path_preamble + '{}'.format(i) for i in paths]
     other_paths = [extra_data_preamble + '{}'.format(i) for i in paths]
-    pickle_beta_n_comparison(paths)
+    pickle_beta_n_comparison(paths, extra=False)
     for data_path, other_path in zip(data_paths, other_paths):
-        pickle_plotter(data_path, other_path)
+        pickle_plotter(data_path, None)
 
 
 def cdf(a):

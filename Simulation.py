@@ -658,11 +658,13 @@ class Simulation:
         longest_list = max(list(starts_of_bursts.values()), key=lambda l: len(l))
         number_of_bursts = len(longest_list)
 
+        # TODO: Examine this more thoroughly
         # pad shorties
         for k, burst in starts_of_bursts.items():
             if len(burst) < number_of_bursts:
                 starts_of_bursts[k].extend([float("inf")] * (number_of_bursts - len(burst)))
 
+        # TODO: Examine this more thoroughly
         collective_burst_starts = []
         for index in range(0, number_of_bursts):
             starting_points = [burst[index] for burst in list(starts_of_bursts.values())]

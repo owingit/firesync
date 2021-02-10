@@ -13,6 +13,7 @@ from bokeh.palettes import Spectral8
 from bokeh.plotting import figure
 import sklearn
 from sklearn.neighbors import KernelDensity
+from scipy.stats import gaussian_kde
 
 
 TSTAR_RANGE = 100
@@ -110,48 +111,19 @@ def cluster_indices(label, labels):
     return numpy.where(labels == label)[0]
 
 
-def get_initial_distribution(limit):
+def get_initial_interburst_interval(limit):
     with open('data/ib01ff.csv', newline='') as f:
         reader = csv.reader(f)
         data = list(reader)
 
     good_data = [float(d[0]) for d in data]
-    trimmed_data = [d * 10 for d in good_data if d > (limit / 10)]
-    return trimmed_data
+    trimmed_data = [d for d in good_data if 250 > d > (limit / 10)]
+    density = gaussian_kde(trimmed_data)
 
-
-def get_kde():
-    with open('data/ib01ff.csv', newline='') as f:
-        reader = csv.reader(f)
-        data = list(reader)
-
-    good_data = [float(d[0]) for d in data]
-    trimmed_data = [d for d in good_data if d > 3.0]
-    print(numpy.mean(trimmed_data))
-
-    # instantiate and fit the KDE model
-    t_d = numpy.asarray(trimmed_data).reshape(-1, 1)
-    x_d = numpy.linspace(math.floor(min(t_d)), math.floor(max(t_d)), 1000)
-    bandwidths = 10 ** numpy.linspace(-1, 1, 100)
-    grid = sklearn.model_selection.GridSearchCV(KernelDensity(kernel='gaussian'),
-                        {'bandwidth': bandwidths},
-                        cv=sklearn.model_selection.LeaveOneOut())
-    # mean = numpy.mean(trimmed_data)
-    # standard_deviation = numpy.std(trimmed_data)
-    # distance_from_mean = abs(trimmed_data - mean)
-    # max_deviations = 3
-    # not_outlier = distance_from_mean < max_deviations * standard_deviation
-    # no_outliers = numpy.asarray(trimmed_data)[not_outlier]
-    grid.fit(t_d)
-    kde = KernelDensity(bandwidth=grid.best_params_['bandwidth'] - 9, kernel='gaussian')
-    kde.fit(t_d)
-
-    # score_samples returns the log of the probability density
-    logprob = kde.score_samples(x_d[:, None])
-
-    plt.fill_between(x_d, numpy.exp(logprob), alpha=0.5)
-    plt.plot(t_d, numpy.full_like(t_d, -0.01), '|k', markeredgewidth=1)
-    # plt.ylim(0, 0.03)
+    choice = -1
+    while choice < 0.0:
+        choice = density.resample(size=1)[0][0]
+    return choice * 10
 
 
 def calc_means_stds(interburst_interval_distribution, swarm_interburst_interval_distribution, on_betas=False):

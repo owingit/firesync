@@ -30,12 +30,13 @@ PHRASE_DURATIONS = "phrases"
 
 TRACE_KEY = 'all_paths'
 FLASH_KEY = 'all_flash_steps'
+BURST_KEY = 'flashes_per_burst'
 OBSTACLE_KEY = 'obstacles'
 DISTANCE_KEY = 'distances'
 
 USE_KURAMATO = False
 DUMP_DATA = True
-DO_PLOTTING = False
+DO_PLOTTING = True
 DUMP_PICKLES = True
 
 
@@ -86,7 +87,7 @@ def main():
         plotter = sp.Plotter(experiment_results, now)
         plotter.plot_example_animations()
         # plotter.compare_obstacles_vs_no_obstacles()
-        # plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
+        plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
     print("done")
@@ -183,6 +184,7 @@ def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experim
             firefly.positionx[int(step)] = p[0]
             firefly.positiony[int(step)] = p[1]
         firefly.flashed_at_this_step = data.get(FLASH_KEY)[i]
+        firefly.flashes_per_burst = data.get(BURST_KEY)[i]
 
     if type(data.get(OBSTACLE_KEY)) == list:
         dummy_simulation.obstacles = [ob.Obstacle(blob[0], blob[1], blob[2])
@@ -248,14 +250,14 @@ def write_results(experiment_results, now):
                 dict_to_dump[name].append({
                     TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
                     FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
-                    # DISTANCE_KEY: experiment.distance_statistics,
+                    BURST_KEY: [ff.flashes_per_burst for ff in experiment.firefly_array],
                     OBSTACLE_KEY: obs
                 })
             else:
                 dict_to_dump[name] = [{
                     TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
                     FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
-                    # DISTANCE_KEY: experiment.distance_statistics,
+                    BURST_KEY: [ff.flashes_per_burst for ff in experiment.firefly_array],
                     OBSTACLE_KEY: obs
                 }]
             if write_networks:
