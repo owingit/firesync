@@ -72,7 +72,6 @@ class Firefly:
         else:
             self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
 
-        self.flashes_per_burst = int(np.random.normal(loc=4, scale=1.2))
         self.flashes_left_in_current_burst = self.flashes_per_burst
         self.last_flashed_at = 0
         self.quiet_period = self.phrase_duration - (
