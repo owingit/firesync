@@ -111,14 +111,22 @@ def cluster_indices(label, labels):
     return numpy.where(labels == label)[0]
 
 
-def get_initial_interburst_interval(limit):
+def get_initial_interburst_interval():
     with open('data/ib01ff.csv', newline='') as f:
         reader = csv.reader(f)
         data = list(reader)
 
     good_data = [float(d[0]) for d in data]
-    trimmed_data = [d for d in good_data if 250 > d > (limit / 10)]
-    density = gaussian_kde(trimmed_data)
+    trimmed_data = [d for d in good_data if 120 > d > 3]
+    n, x = numpy.histogram(trimmed_data, bins=400, density=True)
+    density = gaussian_kde(trimmed_data, bw_method=0.1)
+                           #bw_method=gaussian_kde.covariance_factor)
+    # plt.plot(x, density(x))
+    # plt.xlabel('Tb (s)')
+    # plt.ylabel('Freq')
+    # plt.xlim([0, 120])
+    # plt.title('Smoothed input distribution')
+    # plt.show()
 
     choice = -1
     while choice < 0.0:
