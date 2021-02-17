@@ -2,7 +2,7 @@ import collections
 import math
 import random
 
-import itertools
+import pickle
 import operator
 import networkx as nx
 import network_sorter
@@ -13,6 +13,8 @@ from matplotlib import animation
 from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import FixedLocator, FixedFormatter
 import sklearn.cluster as skl_cluster
+from scipy.signal import find_peaks, find_peaks_cwt, peak_prominences, peak_widths
+from scipy import stats
 
 import Firefly
 import obstacle
@@ -200,10 +202,14 @@ class Simulation:
     def integrate_and_fire_interactions(self, step):
         self.update_epsilon_and_readiness(step)
         influential_neighbors = self.update_voltages(step)
-        for ff, neighbor_phrases in influential_neighbors.items():
-            min_phrase = min(neighbor_phrases) if neighbor_phrases else None
-            if step in ff.ends_of_bursts:
+        for ff, neighbor_qps in influential_neighbors.items():
+            _min_qp = min(neighbor_qps) if neighbor_qps else None
+            if _min_qp is not None:
+                min_phrase = min(_min_qp, ff.quiet_period)
                 ff.update_phrase_duration(min_phrase)
+            else:
+                if step in ff.ends_of_bursts:
+                    ff.update_phrase_duration(None)
 
     def update_epsilon_and_readiness(self, step):
         # update epsilon and readiness
@@ -212,12 +218,7 @@ class Simulation:
 
             # update epsilon to discharging (V is high enough)
             if ff_i.voltage_instantaneous[step - 1] >= ff_i.discharging_threshold:
-                # if ff_i.is_charging == 0 and ff_i.ready:
-                #     ff_i.flash(step)
-                if ff_i.in_burst is False and len(ff_i.ends_of_bursts) == 0:
-                    # this is the "waited enough time" step
-                    ff_i.set_ready()
-                elif ff_i.in_burst is False and len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
+                if ff_i.in_burst is False and (step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period):
                     ff_i.set_ready()
                 elif ff_i.in_burst is True and step - ff_i.last_flashed_at > (ff_i.discharging_time + ff_i.charging_time):
                     ff_i.set_ready()
@@ -228,13 +229,8 @@ class Simulation:
 
             # update epsilon to charging if agent flashes
             elif ff_i.voltage_instantaneous[step - 1] <= ff_i.charging_threshold:
-                if ff_i.is_charging == 0 and ff_i.ready:
-                    ff_i.flash(step)
-                    ff_i.is_charging = 1
-                if len(ff_i.ends_of_bursts) > 0 and step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period:
-                    ff_i.set_ready()
-                if len(ff_i.ends_of_bursts) == 0 and not ff_i.flashed_at_this_step[step]:
-                    ff_i.set_ready()
+                ff_i.is_charging = 1
+                ff_i.unset_ready()
 
             if ff_i.is_charging == 0 and ff_i.ready:
                 ff_i.flash(step)
@@ -248,6 +244,8 @@ class Simulation:
         for i in range(0, self.total_agents):
             ff_i = self.firefly_array[i]
             influential_neighbors[ff_i] = []
+        for i in range(0, self.total_agents):
+            ff_i = self.firefly_array[i]
 
             dvt = ff_i.set_dvt(step)
 
@@ -263,15 +261,17 @@ class Simulation:
                         if skip_dist:
                             continue
                         else:
-                            influential_neighbors[ff_i].append(ff_j.phrase_duration)
+                            if 0 < ff_j.ends_of_bursts[-1] <= step:
+                                influential_neighbors[ff_i].append(ff_j.quiet_period)
                             int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
                             env_signal = env_signal + (1 - ff_j.is_charging)
                     else:
-                        influential_neighbors[ff_i].append(ff_j.phrase_duration)
+                        if 0 < ff_j.ends_of_bursts[-1] <= step:
+                            influential_neighbors[ff_i].append(ff_j.quiet_period)
                         int_term = int_term - ff_i.beta * (abs(ff_i.is_charging - ff_j.is_charging))
                         env_signal = env_signal + (1 - ff_j.is_charging)
 
-                    # this is what one firefly contributes to the charging / discharging
+            # this is what one firefly contributes to the charging / discharging
             ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + (dvt + int_term) * self.timestepsize
         return influential_neighbors
 
@@ -437,7 +437,6 @@ class Simulation:
             plt.close()
         if show_gif:
             plt.show()
-        # plt.clf()
 
     def set_save_string(self, plot_type, now):
         if plot_type == 'phaseanim' or plot_type == 'numphaseovertime':
@@ -488,7 +487,7 @@ class Simulation:
             ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()),
                     label=label, color=color, lw=1)
 
-            ax.set_xlim([0.0, self.steps])
+            ax.set_xlim([0, self.steps])
             ax.set_xlabel('Step')
 
             ax.set_ylim([0.0, self.total_agents])
@@ -642,6 +641,11 @@ class Simulation:
 
         :returns: Flat list of interburst distributions
         """
+        _prominences = {1: 1.0,
+                       5: 2.0,
+                       10: 3.0,
+                       15: 4.0,
+                       20: 5.0}
         starts_of_bursts = {}
         for firefly in self.firefly_array:
             starts_of_bursts[firefly.number] = []
@@ -667,23 +671,55 @@ class Simulation:
         # TODO: Examine this more thoroughly
         collective_burst_starts = []
         for index in range(0, number_of_bursts):
-            starting_points = [burst[index] for burst in list(starts_of_bursts.values())]
-            collective_burst_starts.append(min(starting_points))
-        collective_interburst_distribution = [collective_burst_starts[i+1] - collective_burst_starts[i]
-                                              for i in range(len(collective_burst_starts)-1)]
-        return collective_interburst_distribution
+            starting_points = np.array([burst[index] for burst in list(starts_of_bursts.values())])
+            collective_burst_starts.append(np.mean(starting_points[starting_points < 1000000]))
+        collective_interburst_distribution = np.array([collective_burst_starts[i+1] - collective_burst_starts[i]
+                                                       for i in range(len(collective_burst_starts)-1)])
+
+        _x = self.get_burst_data()
+        prominences = peak_prominences(list(_x.values())[-5000:], find_peaks(list(_x.values())[-5000:])[0], wlen=30)
+
+        prominence_threshold = _prominences[len(self.firefly_array)]
+        peaks_of_x = find_peaks(list(_x.values())[-5000:],
+                                prominence=prominence_threshold,
+                                distance=30
+                                )
+        if len(peaks_of_x[0]) < 5:
+            raise RuntimeError('Not enough peeeeeeks')
+
+        peaks = [peak / 10 for peak in peaks_of_x[0]]
+        peaks = np.insert(peaks, 0, 0.0, axis=0)
+        mids = [(peaks[i + 1] + peaks[i]) / 2 for i in range(len(peaks) - 1)]
+        all_flashes = []
+        for ff in self.firefly_array:
+            all_flashes.extend([i for i, val in enumerate(ff.flashed_at_this_step) if val])
+        all_flashes = sorted(all_flashes)
+        variances = {}
+        for i in range(len(mids) - 1):
+            variance_bucket = [f for f in all_flashes if mids[i] <= f / 10 < mids[i + 1]]
+            variances[i] = math.sqrt(np.var(variance_bucket))
+
+        _collective_interburst_distribution = [peaks[i+1] - peaks[i]
+                                               for i in range(len(peaks)-1)
+                                               ]
+        if prominence_threshold == 1.0:
+            _collective_interburst_distribution = collective_interburst_distribution[
+                collective_interburst_distribution > 0
+            ]
+
+        # with open('incident_variances.pickle', 'wb') as handle:
+        #     pickle.dump(variances, handle)
+
+        cid = np.array(_collective_interburst_distribution)
+
+        return cid
 
     def get_burst_data(self):
         to_plot = {i: 0 for i in range(self.steps)}
         for step in range(self.steps):
             for firefly in self.firefly_array:
                 if firefly.flashed_at_this_step[step] is True:
-                    # s = step * 10
-                    # if s >= self.steps:
-                    #     break
-                    # else:
                     to_plot[step] += 1
-                        # to_plot[s] += 1
         return to_plot
 
     def cascade_logic(self, step):

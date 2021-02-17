@@ -1,20 +1,15 @@
-import networkx as nx
-import numpy
-import matplotlib.pyplot as plt
+import csv
 import math
 import random
-import csv
-import pickle
 
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy
 from bokeh.io import output_file, show
-from bokeh.models import Ellipse, GraphRenderer, StaticLayoutProvider
+from bokeh.models import StaticLayoutProvider
 from bokeh.models.graphs import from_networkx
-from bokeh.palettes import Spectral8
 from bokeh.plotting import figure
-import sklearn
-from sklearn.neighbors import KernelDensity
 from scipy.stats import gaussian_kde
-
 
 TSTAR_RANGE = 100
 
@@ -111,7 +106,8 @@ def cluster_indices(label, labels):
     return numpy.where(labels == label)[0]
 
 
-def get_initial_interburst_interval():
+def get_initial_interburst_interval(limit):
+    show_it = False
     with open('data/ib01ff.csv', newline='') as f:
         reader = csv.reader(f)
         data = list(reader)
@@ -119,17 +115,17 @@ def get_initial_interburst_interval():
     good_data = [float(d[0]) for d in data]
     trimmed_data = [d for d in good_data if 120 > d > 3]
     n, x = numpy.histogram(trimmed_data, bins=400, density=True)
-    density = gaussian_kde(trimmed_data, bw_method=0.1)
-                           #bw_method=gaussian_kde.covariance_factor)
-    # plt.plot(x, density(x))
-    # plt.xlabel('Tb (s)')
-    # plt.ylabel('Freq')
-    # plt.xlim([0, 120])
-    # plt.title('Smoothed input distribution')
-    # plt.show()
+    density = gaussian_kde(trimmed_data, bw_method=gaussian_kde.covariance_factor)
+    if show_it:
+        plt.plot(x, density(x))
+        plt.xlabel('Tb (s)')
+        plt.ylabel('Freq')
+        plt.xlim([0, 120])
+        plt.title('Smoothed input distribution')
+        plt.show()
 
     choice = -1
-    while choice < 0.0:
+    while choice < limit:
         choice = density.resample(size=1)[0][0]
     return choice * 10
 

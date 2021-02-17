@@ -50,8 +50,8 @@ class Firefly:
         self.theta_star = tstar
         self.timestepsize = 0.1
 
-        self.phase = np.zeros(steps)
-        self.phase[0] = random.random() * math.pi * 2
+        # self.phase = np.zeros(steps)
+        # self.phase[0] = random.random() * math.pi * 2
 
         # integrate and fire params
         self.beta = beta
@@ -65,10 +65,11 @@ class Firefly:
         self.in_burst = False
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
-        self.flashes_per_burst = random.choice([2, 3, 4, 5, 6])
+        self.flashes_per_burst = int(np.random.choice([2, 3, 4, 5, 6], p=[0.05, 0.2, 0.4, 0.2, 0.15]))
         if phrase_duration == "distribution":
-            self.phrase_duration = simulation_helpers.get_initial_interburst_interval()
-            # np.random.uniform(50, 1200, size=1)
+            self.phrase_duration = simulation_helpers.get_initial_interburst_interval(
+                limit=2 * self.flashes_per_burst * (self.charging_time + self.discharging_time) / 10
+            )
         else:
             self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
 
@@ -78,7 +79,8 @@ class Firefly:
                  (self.charging_time + self.discharging_time) * self.flashes_per_burst
         )
         self.flashed_at_this_step = [False] * steps
-        self.ends_of_bursts = []
+        self.steps_with_flash = []
+        self.ends_of_bursts = [0]
 
         # the total path of a firefly through 2d space
         self.trace = {0: (self.positionx[0], self.positiony[0])}
@@ -98,12 +100,14 @@ class Firefly:
     def get_phrase_duration(self):
         return self.phrase_duration
 
-    def update_phrase_duration(self, fastest_phrase=None):
-        if fastest_phrase is None:
-            self.phrase_duration = simulation_helpers.get_initial_interburst_interval()
+    def update_phrase_duration(self, fastest=None):
+        if fastest is None:
+            self.phrase_duration = simulation_helpers.get_initial_interburst_interval(
+                limit=2 * self.flashes_per_burst * (self.charging_time + self.discharging_time) / 10
+            )
+            self.update_quiet_period()
         else:
-            self.phrase_duration = fastest_phrase
-        self.update_quiet_period()
+            self.quiet_period = fastest
 
     def update_quiet_period(self):
         self.quiet_period = self.phrase_duration - (
@@ -193,6 +197,7 @@ class Firefly:
     def flash(self, t):
         self.last_flashed_at = t
         self.flashed_at_this_step[t] = True
+        self.steps_with_flash.append(t)
         self.flashes_left_in_current_burst -= 1
         self.in_burst = True
         if self.flashes_left_in_current_burst == 0:

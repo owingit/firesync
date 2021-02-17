@@ -1,12 +1,12 @@
-import matplotlib.pyplot as plt
-from matplotlib import cm
-import numpy as np
-import random
-from scipy.interpolate import make_interp_spline
 import math
-import simulation_helpers
 import pickle
-from scipy.stats import norm
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import cm
+from scipy.interpolate import make_interp_spline
+
+import simulation_helpers
 
 
 class Plotter:
@@ -15,6 +15,7 @@ class Plotter:
         self.now = now
 
     def plot_quiet_period_distributions(self, on_betas=False, path=None):
+        pickle_flag = False
         interburst_interval_distribution = {}
         swarm_interburst_interval_distribution = {}
         ob_interburst_interval_distribution = {}
@@ -55,15 +56,15 @@ class Plotter:
                         swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist()]
                     else:
                         swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
+        if pickle_flag:
+            with open(path+'/beta_sweep_individual.pickle', 'wb') as f_i:
+                print('pickling {}+beta_sweep_individual.pickle...'.format(path))
+                pickle.dump(interburst_interval_distribution, f_i)
+            with open(path+'/beta_sweep_swarm.pickle', 'wb') as f_s:
+                print('pickling {}+beta_sweep_swarm.pickle...'.format(path))
+                pickle.dump(swarm_interburst_interval_distribution, f_s)
 
-        with open(path+'/beta_sweep_individual.pickle', 'wb') as f_i:
-            print('pickling {}+beta_sweep_individual.pickle...'.format(path))
-            pickle.dump(interburst_interval_distribution, f_i)
-        with open(path+'/beta_sweep_swarm.pickle', 'wb') as f_s:
-            print('pickling {}+beta_sweep_swarm.pickle...'.format(path))
-            pickle.dump(swarm_interburst_interval_distribution, f_s)
-
-        # using pickle plotter right now
+        # using pickle plotter right now, so this is commented out in the meantime
         # if len(ob_interburst_interval_distribution.items()) > 0:
         #     # s_means, s_stds, i_means, i_stds = self.calc_means_stds(ob_interburst_interval_distribution,
         #     #                                                         ob_swarm_interburst_interval_distribution,
@@ -104,7 +105,7 @@ class Plotter:
 
                 for identifier, results in d.items():
                     for k, iid_list in results.items():
-                        iids = [x / 10 for iid in iid_list for x in iid]
+                        iids = [x for iid in iid_list for x in iid]
                         if not identifier_data.get(k):
                             identifier_data[k] = iids
                         else:
@@ -168,7 +169,7 @@ class Plotter:
                 ax.set_ylabel('Freq count')
                 ax.set_xlim(0, 100)
                 for k, iid_list in results.items():
-                    iids = [x / 10 for iid in iid_list for x in iid]
+                    iids = [x for iid in iid_list for x in iid]
                     if k == 1:
                         ax.set_xlim(0, 500)
                         bins = 50
@@ -223,9 +224,48 @@ class Plotter:
                 if simulation.use_kuramato:
                     simulation.animate_phase_bins(self.now, show_gif=False, write_gif=True)
             for i, simulation in enumerate(simulation_list):
-                # if simulation.total_agents == 1:
                 #   simulation.animate_walk(self.now, show_gif=False, write_gif=True)
-                    simulation.plot_bursts(self.now, instance=i, show_gif=True, write_gif=True)
+                simulation.plot_bursts(self.now, instance=i, show_gif=True, write_gif=True)
+
+    def compare_time_series(self):
+        """
+        Call a simulation's plot_bursts functionality for all of the best betas.
+
+        Assumes invoked on data files for 5 best (1 each) beta dicts
+        """
+        burst_dict = {}
+        for identifier, simulation_list in self.experiment_results.items():
+            for simulation in simulation_list:
+                k = simulation.total_agents
+                bursts_at_each_timestep = simulation.get_burst_data()
+                if burst_dict.get(k) is not None:
+                    burst_dict[k].append(bursts_at_each_timestep)  # time series
+                else:
+                    burst_dict[k] = [bursts_at_each_timestep]
+        plotting_dict = {}
+        for agent_count in burst_dict.keys():
+            plotting_dict[agent_count] = self.get_parsimonious_timeseries(burst_dict[agent_count])
+        fig, ax = plt.subplots()
+        for agent_count in plotting_dict.keys():
+            ax.plot(list(plotting_dict[agent_count].keys()), list(plotting_dict[agent_count].values()),
+                    label='{}ff'.format(agent_count), lw=1, alpha=0.8)
+        plt.legend()
+        plt.xlabel('T')
+        plt.ylabel('Flashes')
+        plt.title('Compare time series of best beta, N=[1,5,10,15,20]')
+        plt.show()
+
+    @staticmethod
+    def get_parsimonious_timeseries(list_of_dicts):
+        best_dict = {}
+        max_zeroes = 0
+        for l in list_of_dicts:
+            vals = list(l.values())
+            zeroes = vals.count(0)
+            if zeroes > max_zeroes:
+                best_dict = l
+                max_zeroes = zeroes
+        return best_dict
 
     def compare_obstacles_vs_no_obstacles(self):
         """Plot obstacle simulations against no obstacles."""
