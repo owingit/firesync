@@ -87,7 +87,7 @@ def main():
         plotter = sp.Plotter(experiment_results, now)
         # plotter.plot_example_animations()
         # plotter.compare_time_series()
-        # plotter.compare_obstacles_vs_no_obstacles()
+        plotter.compare_simulations()
         plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
@@ -129,6 +129,8 @@ def process_json_db(program_argv, experiment_results):
             obstacle_flag = False
             if 'obstacles' in db:
                 obstacle_flag = True
+            elif '_null' in db:
+                obstacle_flag = True
             raw_experiment_results = load_experiment_results(os.path.abspath(db))
             if raw_experiment_results:
                 experiment_results.update(process_results_from_written_file(raw_experiment_results, obstacle_flag))
@@ -137,10 +139,17 @@ def process_json_db(program_argv, experiment_results):
 
 
 def load_experiment_results(db_file):
+    json_d = {}
     if '.json' in db_file:
         with open(db_file, 'rb+') as data:
             json_dict = json.load(data)
-        return json_dict
+        if '_null' in db_file:
+            k = list(json_dict.keys())[0]
+            new_k = k+'_null'
+            json_d[new_k] = json_dict.pop(k)
+            return json_d
+        else:
+            return json_dict
     else:
         print('Experiment results must be in .json format!')
         return None

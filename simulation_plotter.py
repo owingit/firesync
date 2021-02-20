@@ -16,6 +16,10 @@ class Plotter:
 
     def plot_quiet_period_distributions(self, on_betas=False, path=None):
         pickle_flag = False
+        if 'null' in path:
+            is_null = True
+        else:
+            is_null = False
         interburst_interval_distribution = {}
         swarm_interburst_interval_distribution = {}
         ob_interburst_interval_distribution = {}
@@ -36,9 +40,13 @@ class Plotter:
                             simulation.calc_interburst_distribution())
 
                     if not ob_swarm_interburst_interval_distribution[identifier].get(k):
-                        ob_swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist()]
+                        ob_swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist(
+                            is_null)
+                        ]
                     else:
-                        ob_swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
+                        ob_swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist(
+                            is_null)
+                        )
             else:
                 interburst_interval_distribution[identifier] = {}
                 swarm_interburst_interval_distribution[identifier] = {}
@@ -53,9 +61,13 @@ class Plotter:
                         interburst_interval_distribution[identifier][k].append(simulation.calc_interburst_distribution())
 
                     if not swarm_interburst_interval_distribution[identifier].get(k):
-                        swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist()]
+                        swarm_interburst_interval_distribution[identifier][k] = [simulation.swarm_interburst_dist(
+                            is_null)
+                        ]
                     else:
-                        swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist())
+                        swarm_interburst_interval_distribution[identifier][k].append(simulation.swarm_interburst_dist(
+                            is_null)
+                        )
         if pickle_flag:
             with open(path+'/beta_sweep_individual.pickle', 'wb') as f_i:
                 print('pickling {}+beta_sweep_individual.pickle...'.format(path))
@@ -225,7 +237,7 @@ class Plotter:
                     simulation.animate_phase_bins(self.now, show_gif=False, write_gif=True)
             for i, simulation in enumerate(simulation_list):
                 #   simulation.animate_walk(self.now, show_gif=False, write_gif=True)
-                simulation.plot_bursts(self.now, instance=i, show_gif=True, write_gif=True)
+                simulation.plot_bursts(self.now, instance=i, show_gif=False, write_gif=True)
 
     def compare_time_series(self):
         """
@@ -267,8 +279,12 @@ class Plotter:
                 max_zeroes = zeroes
         return best_dict
 
-    def compare_obstacles_vs_no_obstacles(self):
-        """Plot obstacle simulations against no obstacles."""
+    def compare_simulations(self):
+        """
+        Plot simulations of a subset against simulations of another subset
+
+        (was: obstacles, uses that flag as an indicator).
+        """
         name = list(self.experiment_results.keys())[0]
         step_count = self.experiment_results[name][0].steps
         obstacle_simulations = []
@@ -276,7 +292,6 @@ class Plotter:
         value = list(self.experiment_results.values())[0][0]
         num_agents = value.total_agents
         steps = step_count
-        bursts_axis = plt.axes(xlim=(0, steps), ylim=(0, num_agents))
         show = False
         write = True
         for identifier, simulation_list in self.experiment_results.items():
@@ -285,14 +300,26 @@ class Plotter:
                     obstacle_simulations.append(simulation)
                 else:
                     non_obstacle_simulations.append(simulation)
-                simulation.plot_bursts(self.now, i, show_gif=show, write_gif=write, shared_ax=bursts_axis)
+        for i, (sim_1, sim_2) in enumerate(zip(non_obstacle_simulations, obstacle_simulations)):
+            bursts_axis = plt.axes(xlim=(7000, steps), ylim=(0, num_agents))
+            sim_1.plot_bursts(self.now, i, show_gif=show, write_gif=write, shared_ax=bursts_axis)
+            sim_2.plot_bursts(self.now, i, show_gif=show, write_gif=write, shared_ax=bursts_axis)
+            plt.xlabel('t')
+            plt.ylabel('num flashes')
+            plt.legend()
+            plt.title('Flashes over time ' + '{}ff'.format(len(sim_1.firefly_array)) + ' with and without theory')
+                      #value.boilerplate + )
+            if write:
+                plt.savefig('data/time_series_comparison_{}.png'.format(i))
+                plt.close()
+            if show:
+                plt.show()
         try:
             assert len(obstacle_simulations) == len(non_obstacle_simulations), \
                 'Need both obstacle and non obstacle sims!'
         except AssertionError:
             return
-        plt.legend()
-        plt.title('Flashes over time ' + value.boilerplate + ' with and without obstacles')
+
         if show:
             plt.show()
         if write:

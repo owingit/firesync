@@ -123,14 +123,14 @@ def beta_plotter(individual, group, data_path, ff_count, group_null=None):
             # the_x, the_y = plot_theoretical_data(ax, data_path=data_path, ff_count=ff_count, plot=True)
             beta = round(float(identifier.split('beta')[0].split('density')[1]), 4)
             _iids = []
-
             group_null_iids = []
+
             for k, iid_list in results.items():
                 group_null_iid_list = group_null[identifier][k] if group_null is not None else []
-                _iids.extend([x for iid in iid_list for x in iid])
-                group_null_iids.extend([y for gn_iid in group_null_iid_list for y in gn_iid])
-            iids = [iid for iid in _iids if iid > 4]
-            group_null_iids = [gn_iid for gn_iid in group_null_iids if gn_iid > 4]
+                _iids.extend([x / 10 for iid in iid_list for x in iid])
+                group_null_iids.extend([y / 10 for gn_iid in group_null_iid_list for y in gn_iid])
+            iids = [iid for iid in _iids if iid > 3]
+            group_null_iids = [gn_iid for gn_iid in group_null_iids if gn_iid > 3]
             beta_dict[i][beta] = iids
             mean = round(float(np.mean(iids)), 4)
             std = round(float(np.std(iids)), 4)
@@ -176,7 +176,7 @@ def beta_plotter(individual, group, data_path, ff_count, group_null=None):
             #     std
             # ))
             plt.legend()
-            plt.savefig('histograms/2_14/{}_interburst_dists_w_wo_theory_{}{}.png'.format(
+            plt.savefig('histograms/2_18/{}_interburst_dists_w_wo_theory_{}{}.png'.format(
                 string,
                 beta,
                 independent_var
@@ -195,7 +195,7 @@ def plot_experimental_data(ax, data_path, ff_count, plot=False):
         for i, row in enumerate(plots):
             x.append(i)
             y_maybe = float(row[0])
-            if y_maybe > 4:
+            if y_maybe > 3:
                 y.append(y_maybe)
     if ff_count == '01':
         bins = 50
@@ -234,7 +234,7 @@ def get_stats_from_experimental_data(data_path, ff_count):
         for i, row in enumerate(plots):
             x.append(i)
             y_maybe = float(row[0])
-            if y_maybe > 4:
+            if y_maybe > 3:
                 y.append(y_maybe)
     mean = round(float(np.mean(y)), 4)
     std = round(float(np.std(y)), 4)
@@ -247,8 +247,8 @@ def pickle_beta_n_comparison(paths, extra=True):
     comparison_dict = {}
     experimental_dict = {}
     for p in paths:
-        data_path = 'data_from_cluster/raw_experiment_results/2_12/' + p
-        ff_count = p.split('ff')[0]
+        data_path = 'data_from_cluster/raw_experiment_results/' + p
+        ff_count = p.split('ff')[0].split('/')[1]
         mean_exp, std_exp, skew_exp, kurtosis_exp, experimental_data = get_stats_from_experimental_data(
             data_path, ff_count)
         comparison_dict[ff_count] = {}
@@ -281,22 +281,19 @@ def pickle_beta_n_comparison(paths, extra=True):
             beta = round(float(identifier.split('beta')[0].split('density')[1]), 4)
             _iids = []
             for k, iid_list in results.items():
-                _iids.extend([x for iid in iid_list for x in iid])
+                _iids.extend([x / 10 for iid in iid_list for x in iid])
 
-            iids = [iid for iid in _iids if iid > 4]
+            iids = [iid for iid in _iids if iid > 3]
             mean = round(float(np.mean(iids)), 4)
             std = round(float(np.std(iids)), 4)
             skewness = skew(iids)
             kurt = kurtosis(iids)
             iids_normalized = np.array(iids) / sum(iids)
             exp_normalized = np.array(experimental_data) / sum(experimental_data)
-            nmis = []
             for i in range(5):
                 iids_normalized_sample = np.random.choice(iids_normalized, size=len(exp_normalized), p=iids_normalized)
-                nmis.append(sklearn.metrics.normalized_mutual_info_score(iids_normalized_sample, exp_normalized))
-            nmi = np.mean(nmis)
             ks = ks_2samp(iids, experimental_data)
-            comparison_dict[ff_count][beta] = (mean, std, skewness, kurt, ks, nmi)
+            comparison_dict[ff_count][beta] = (mean, std, skewness, kurt, ks)
 
     results_dict = {}
     for key in comparison_dict.keys():
@@ -304,8 +301,7 @@ def pickle_beta_n_comparison(paths, extra=True):
                              'std': [],
                              'skew': [],
                              'kurt': [],
-                             'ks': [],
-                             'nmi': []}
+                             'ks': []}
         comparator = experimental_dict[key]
         min_difference_means = float('inf')
         min_difference_stds = float('inf')
@@ -326,18 +322,14 @@ def pickle_beta_n_comparison(paths, extra=True):
                 min_difference_stds = abs(stats[3] - comparator[3])
             # if stats[4][1] > 0.05:
             results_dict[key]['ks'].append((beta, stats[4][0]))
-            results_dict[key]['nmi'].append((beta, stats[5]))
     for key in results_dict:
         for sub_k in results_dict[key].keys():
-            if sub_k == 'nmi':
-                results_dict[key][sub_k].sort(key=lambda x: x[1], reverse=True)
-            else:
-                results_dict[key][sub_k].sort(key=lambda x: x[1])
+            results_dict[key][sub_k].sort(key=lambda x: x[1])
     # use K-S right now
     to_plot = {}
     ks = {}
     for key in results_dict:
-        top = results_dict[key]['ks'][:1]
+        top = results_dict[key]['mean'][:1]
         top_ks = results_dict[key]['ks'][:1]
         to_plot[key] = [ff[0] for ff in top]
         ks[key] = [ff[1] for ff in top_ks]
@@ -357,31 +349,31 @@ def pickle_beta_n_comparison(paths, extra=True):
     ax.set_ylabel('Beta')
     plt.title('Best beta values from sweep 0-1')
     plt.legend()
-    plt.savefig('histograms/2_12/Beta_vs_N_.png')
+    plt.savefig('histograms/2_18/Beta_vs_N_.png')
 
 
 def main():
-    data_path_preamble = 'data_from_cluster/raw_experiment_results/2_14/'
+    data_path_preamble = 'data_from_cluster/raw_experiment_results/'
     paths = [
-             '01ff/',
-             '05ff/',
-             '10ff/',
-             '15ff/',
-             '20ff/'
+             '2_18/01ff/',
+             '2_18/05ff/',
+             '2_18/10ff/',
+             '2_18/15ff/',
+             '2_18/20ff/'
             ]
     null_paths = [
-        '01ff_null/',
-        '05ff_null/',
-        '10ff_null/',
-        '15ff_null/',
-        '20ff_null/'
+        '2_18_null/01ff/',
+        '2_18_null/05ff/',
+        '2_18_null/10ff/',
+        '2_18_null/15ff/',
+        '2_18_null/20ff/'
     ]
 
     data_paths = [data_path_preamble + '{}'.format(i) for i in paths]
     null_paths = [data_path_preamble + '{}'.format(i) for i in null_paths]
-    # pickle_beta_n_comparison(paths, extra=True)
-    for data_path, other_path in zip(data_paths, null_paths):
-        pickle_plotter(data_path, other_path)
+    pickle_beta_n_comparison(paths, extra=True)
+    # for data_path, other_path in zip(data_paths, null_paths):
+    #     pickle_plotter(data_path, other_path)
 
 
 def cdf(a):

@@ -477,17 +477,17 @@ class Simulation:
         plt.style.use('seaborn-pastel')
         if self.use_obstacles:
             color = 'green'
-            label = 'obstacles'
+            label = 'No adoption of fastest'
         else:
             color = 'blue'
-            label = 'no_obstacles'
+            label = 'Adoption of fastest'
         if not shared_ax:
             ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
             bursts_at_each_timestep = self.get_burst_data()
             ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()),
                     label=label, color=color, lw=1)
 
-            ax.set_xlim([0, self.steps])
+            ax.set_xlim([7000, self.steps])
             ax.set_xlabel('Step')
 
             ax.set_ylim([0.0, self.total_agents])
@@ -636,21 +636,23 @@ class Simulation:
 
         return flat_interburst_distribution
 
-    def swarm_interburst_dist(self):
+    def swarm_interburst_dist(self, is_null=False):
         """Calculate the distribution of interburst intervals for the collective bursting events.
 
         :returns: Flat list of interburst distributions
         """
-        _prominences = {1: 1.0,
-                       5: 2.0,
-                       10: 3.0,
-                       15: 4.0,
-                       20: 5.0}
+        _prominences = {
+            1: 1.0,
+            5: 2.0,
+            10: 3.0,
+            15: 4.0,
+            20: 5.0
+        }
         starts_of_bursts = {}
         for firefly in self.firefly_array:
             starts_of_bursts[firefly.number] = []
             flashes = firefly.flashes_per_burst
-            for i, yes in enumerate(firefly.flashed_at_this_step):
+            for i, yes in enumerate(firefly.flashed_at_this_step[-5000:]):
                 if yes and flashes == firefly.flashes_per_burst:
                     starts_of_bursts[firefly.number].append(i)
                     flashes -= 1
@@ -680,19 +682,32 @@ class Simulation:
         prominences = peak_prominences(list(_x.values())[-5000:], find_peaks(list(_x.values())[-5000:])[0], wlen=30)
 
         prominence_threshold = _prominences[len(self.firefly_array)]
-        peaks_of_x = find_peaks(list(_x.values())[-5000:],
-                                prominence=prominence_threshold,
-                                distance=30
-                                )
-        if len(peaks_of_x[0]) < 5:
-            raise RuntimeError('Not enough peeeeeeks')
+        try:
+            peaks_of_x = find_peaks(list(_x.values())[-5000:],
+                                    height=prominence_threshold,
+                                    distance=50
+                                    )
+            if len(peaks_of_x[0]) < 5:
+                raise RuntimeError('Not enough peeeeeeks')
+        except RuntimeError:
+            try:
+                peaks_of_x = find_peaks(list(_x.values())[-5000:],
+                                        prominence=2.0,
+                                        distance=50
+                                        )
+                if len(peaks_of_x[0]) < 5:
+                    raise RuntimeError('Not enough peeeeeeks')
+            except RuntimeError:
+                peaks_of_x = find_peaks(list(_x.values())[-5000:],
+                                        prominence=1.0,
+                                        distance=50
+                                        )
 
         peaks = [peak / 10 for peak in peaks_of_x[0]]
-        peaks = np.insert(peaks, 0, 0.0, axis=0)
         mids = [(peaks[i + 1] + peaks[i]) / 2 for i in range(len(peaks) - 1)]
         all_flashes = []
         for ff in self.firefly_array:
-            all_flashes.extend([i for i, val in enumerate(ff.flashed_at_this_step) if val])
+            all_flashes.extend([i for i, val in enumerate(ff.flashed_at_this_step[-5000:]) if val])
         all_flashes = sorted(all_flashes)
         variances = {}
         for i in range(len(mids) - 1):
@@ -702,13 +717,14 @@ class Simulation:
         _collective_interburst_distribution = [peaks[i+1] - peaks[i]
                                                for i in range(len(peaks)-1)
                                                ]
-        if prominence_threshold == 1.0:
+        if not is_null:
             _collective_interburst_distribution = collective_interburst_distribution[
                 collective_interburst_distribution > 0
             ]
-
-        # with open('incident_variances.pickle', 'wb') as handle:
-        #     pickle.dump(variances, handle)
+        # km = skl_cluster.KMeans(n_clusters=number_of_bursts, max_iter=1000)
+        # e = km.fit(np.array(all_flashes).reshape(-1, 1))
+        # ccs = sorted([cc[0] for cc in e.cluster_centers_])
+        # c_i_d = [(ccs[i+1] - ccs[i]) / 10 for i in range(len(ccs)-1)]
 
         cid = np.array(_collective_interburst_distribution)
 
