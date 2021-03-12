@@ -15,6 +15,7 @@ import argparse
 import simulation_plotter as sp
 import Simulation
 import obstacle as ob
+import time_series_analysis
 
 TSTARS = "theta*"
 TBS = "Tb"
@@ -38,6 +39,7 @@ USE_KURAMATO = False
 DUMP_DATA = True
 DO_PLOTTING = True
 DUMP_PICKLES = True
+TIME_SERIES_ANALYSIS = False
 
 
 def main():
@@ -83,11 +85,16 @@ def main():
         experiment_results = run_simulations(simulations, use_processes=True)
         if DUMP_DATA:
             write_results(experiment_results, now)
+    if TIME_SERIES_ANALYSIS:
+        tsa = time_series_analysis.TSA(experiment_results, now)
+        tsa.fourier_transform()
+        # tsa.width_histogram()
+        # tsa.plot_interburst_intervals()
     if DO_PLOTTING:
         plotter = sp.Plotter(experiment_results, now)
-        # plotter.plot_example_animations()
+        plotter.plot_example_animations()
         # plotter.compare_time_series()
-        plotter.compare_simulations()
+        # plotter.compare_simulations()
         plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
@@ -101,7 +108,7 @@ def extract_range(arglist):
         if len(float_args) == 1:
             retlist = float_args
         else:
-            retlist = np.arange(float_args[0], float_args[1], 0.01)
+            retlist = np.arange(float_args[0], float_args[1], 0.1)
     else:
         retlist = None
     return retlist
@@ -189,6 +196,7 @@ def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experim
     dummy_simulation.has_run = True
 
     for i, firefly in enumerate(dummy_simulation.firefly_array):
+
         firefly.trace = data.get(TRACE_KEY)[i]
         for step, p in firefly.trace.items():
             firefly.positionx[int(step)] = p[0]
@@ -249,29 +257,30 @@ def write_results(experiment_results, now):
     for k in experiment_results.values():
         dict_to_dump = {}
         name = ''
-        for experiment in k:
-            result = [x.strip() for x in experiment.boilerplate.split(',')]
-            name = result[0] + result[1] + result[2] + '{}_steps'.format(experiment.steps)
-            if experiment.obstacles:
-                obs = [(obstacle.centerx, obstacle.centery, obstacle.radius) for obstacle in experiment.obstacles]
-            else:
-                obs = 'No obstacles'
-            if dict_to_dump.get(name):
-                dict_to_dump[name].append({
-                    TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
-                    FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
-                    BURST_KEY: [ff.flashes_per_burst for ff in experiment.firefly_array],
-                    OBSTACLE_KEY: obs
-                })
-            else:
-                dict_to_dump[name] = [{
-                    TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
-                    FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
-                    BURST_KEY: [ff.flashes_per_burst for ff in experiment.firefly_array],
-                    OBSTACLE_KEY: obs
-                }]
-            if write_networks:
-                write_network_data(experiment, now)
+        for q, experiment in enumerate(k):
+            if q % 5 == 0:
+                result = [x.strip() for x in experiment.boilerplate.split(',')]
+                name = result[0] + result[1] + result[2] + '{}_steps'.format(experiment.steps)
+                if experiment.obstacles:
+                    obs = [(obstacle.centerx, obstacle.centery, obstacle.radius) for obstacle in experiment.obstacles]
+                else:
+                    obs = 'No obstacles'
+                if dict_to_dump.get(name):
+                    dict_to_dump[name].append({
+                        TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
+                        FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
+                        BURST_KEY: [ff.flashes_per_burst for ff in experiment.firefly_array],
+                        OBSTACLE_KEY: obs
+                    })
+                else:
+                    dict_to_dump[name] = [{
+                        TRACE_KEY: [ff_i.trace for ff_i in experiment.firefly_array],
+                        FLASH_KEY: [ff.flashed_at_this_step for ff in experiment.firefly_array],
+                        BURST_KEY: [ff.flashes_per_burst for ff in experiment.firefly_array],
+                        OBSTACLE_KEY: obs
+                    }]
+                if write_networks:
+                    write_network_data(experiment, now)
         with open("data/raw_experiment_results/{}_experiment_results_{}.json".format(
                 name, str(now).replace(' ', '_')), 'w') as f:
             json.dump(dict_to_dump, f)

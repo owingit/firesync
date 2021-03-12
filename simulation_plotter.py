@@ -15,7 +15,7 @@ class Plotter:
         self.now = now
 
     def plot_quiet_period_distributions(self, on_betas=False, path=None):
-        pickle_flag = False
+        pickle_flag = True
         if 'null' in path:
             is_null = True
         else:
