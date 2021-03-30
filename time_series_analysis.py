@@ -1,34 +1,12 @@
-import collections
-import math
-import random
-
-import pickle
-import operator
-import networkx as nx
-import network_sorter
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import animation
-from matplotlib.animation import FuncAnimation
-from matplotlib.ticker import FixedLocator, FixedFormatter
-import sklearn.cluster as skl_cluster
-from scipy.signal import find_peaks, find_peaks_cwt, peak_prominences, peak_widths
-from scipy import stats
-from scipy.fft import fft, ifft, rfft
-
-import Firefly
-import obstacle
-import simulation_helpers
+from scipy.fft import fft
 
 
 class TSA:
     def __init__(self, experiment_results, now):
         self.experiment_results = experiment_results
         self.now = now
-        self.__betas__ = [0.06,
-                          0.16, 0.26, 0.36, 0.46, 0.56, 0.66, 0.76, 0.86,
-                          0.96]
 
     def fourier_transform(self):
         thresh = 0
@@ -69,19 +47,15 @@ class TSA:
         peak_results = {}
         s = None
         for identifier, simulation_list in self.experiment_results.items():
-            try:
-                beta = round(float(identifier.split('beta')[0].split('density')[1]), 3)
-            except AttributeError:
-                beta = list(identifier)[3]
-            if beta in self.__betas__:
-                results[beta] = {}
-                cutoff_results[beta] = {}
-                peak_results[beta] = {}
-                for i, simulation in enumerate(simulation_list):
-                    s = simulation
-                    _, peak_results[beta][i], cutoff_results[beta][i], results[beta][i] = simulation.peak_variances(
-                        thresh=0
-                    )
+            beta = list(identifier)[0]
+            results[beta] = {}
+            cutoff_results[beta] = {}
+            peak_results[beta] = {}
+            for i, simulation in enumerate(simulation_list):
+                s = simulation
+                _, peak_results[beta][i], cutoff_results[beta][i], results[beta][i] = simulation.peak_variances(
+                    thresh=0
+                )
 
         sorted_results = {k: results[k] for k in sorted(results)}
         all_widths = {}
@@ -109,7 +83,7 @@ class TSA:
             ax.plot(edges[:-1], ys, label='{}'.format(beta), marker='2')
         ax.set_xlabel('Height (#)')
         ax.set_ylabel('Probability density')
-        # ax.set_title('{}ff'.format(len(simulation.firefly_array)))
+        ax.set_title('Height histogram, {}ff'.format(ff_count))
         plt.legend()
         plt.savefig('data/height_histogram_{}ff'.format(ff_count))
 
@@ -122,24 +96,22 @@ class TSA:
             ax.plot(edges[:-1], ys, label='{}'.format(beta), marker='2')
         ax.set_xlabel('Width (s)')
         ax.set_ylabel('Probability density')
-        # ax.set_title('{}ff'.format(len(simulation.firefly_array)))
+        ax.set_title('Width histogram, {}ff'.format(ff_count))
         plt.legend()
         plt.savefig('data/width_histogram_{}ff'.format(ff_count))
 
     def plot_widths(self):
+        steps = 50000  # num simulation steps TODO: extract this
         results = {}
         peak_results = {}
         cutoff_results = {}
         for identifier, simulation_list in self.experiment_results.items():
-            try:
-                beta = round(float(identifier.split('beta')[0].split('density')[1]), 3)
-            except AttributeError:
-                beta = list(identifier)[3]
-            if beta in self.__betas__:
-                results[beta] = {}
-                cutoff_results[beta] = {}
-                for i, simulation in enumerate(simulation_list):
-                    peak_results[beta][i], cutoff_results[beta][i], results[beta][i] = simulation.peak_variances(thresh=0)
+            beta = list(identifier)[0]
+            peak_results[beta] = {}
+            results[beta] = {}
+            cutoff_results[beta] = {}
+            for i, simulation in enumerate(simulation_list):
+                peak_results[beta][i], _, cutoff_results[beta][i], results[beta][i] = simulation.peak_variances(thresh=0)
         all_scatterpoints = {}
         print(peak_results)
         sorted_peak_results = {k: peak_results[k] for k in sorted(peak_results)}
@@ -154,7 +126,7 @@ class TSA:
             all_scatterpoints[beta] = []
             burst_avgs = []
             for instance in sorted_results[beta].keys():
-                timescale = 12000 / len(sorted_results[beta][instance])
+                timescale = steps / len(sorted_results[beta][instance])
                 scatterpoints = {}
                 for x1, y1 in sorted_results[beta][instance].items():
                     if not scatterpoints.get(x1):
@@ -167,45 +139,52 @@ class TSA:
                     burst_avgs.append((s, avg_at_burst))
             all_scatterpoints[beta].extend(burst_avgs)
 
-            x = [tup[0] * 60 for tup in all_scatterpoints[beta]]
+            x = [tup[0] * timescale for tup in all_scatterpoints[beta]]
             y = [tup[1] for tup in all_scatterpoints[beta]]
-            ax.scatter(x, y, label='beta={}'.format(beta), s=1)
-            ax.set_ylim([0, 400])
+            z = np.polyfit(x, y, 1)
+            p = np.poly1d(z)
+            ax.plot(x, p(x), "--", label='beta={}'.format(beta))
+            ax.set_ylim([0, 500])
 
         ax.set_xlabel('T')
         ax.set_ylabel('Width variance')
-        # ax.set_title('{}ff'.format(len(simulation.firefly_array)))
+        ax.set_title('{}ff'.format(len(simulation.firefly_array)))
         plt.legend()
-        plt.show()
         plt.savefig('data/{}ff_width_variances.png'.format(len(simulation.firefly_array)))
 
     def plot_interburst_intervals(self):
         results = {}
+        steps = 50000 # num simulation steps TODO: extract this
         for identifier, simulation_list in self.experiment_results.items():
             try:
                 beta = round(float(identifier.split('beta')[0].split('density')[1]), 3)
             except AttributeError:
-                beta = list(identifier)[3]
-            if beta in self.__betas__:
-                results[beta] = {}
-                for i, simulation in enumerate(simulation_list):
-                    results[beta][i] = simulation.temporal_interburst_dist(thresh=0)
+                beta = list(identifier)[0]
+            results[beta] = {}
+            for i, simulation in enumerate(simulation_list):
+                results[beta][i] = simulation.temporal_interburst_dist(thresh=0)
         all_scatterpoints = {}
 
         fig, ax = plt.subplots()
         sorted_results = {k: results[k] for k in sorted(results)}
-        for beta in sorted_results.keys():
+        for beta in list(sorted_results.keys()):
             all_scatterpoints[beta] = []
             for instance in sorted_results[beta].keys():
-                scatterpoints = [(x1, y1) for x1, y1 in sorted_results[beta][instance].items()]
+                scatterpoints = [(x1, y1) for x1, y1 in sorted_results[beta][instance].items() if y1 > 0]
+                timescale = steps / len(sorted_results[beta][instance])
                 all_scatterpoints[beta].extend(scatterpoints)
 
-            x = [tup[0] for tup in all_scatterpoints[beta]]
+            x = [tup[0] * timescale for tup in all_scatterpoints[beta]]
             y = [tup[1] for tup in all_scatterpoints[beta]]
-            ax.scatter(x, y, label='beta={}'.format(beta), s=4)
 
-        ax.set_xlabel('Burst')
+            z = np.polyfit(x, y, 1)
+            p = np.poly1d(z)
+            ax.plot(x, p(x), "--", label='beta={}'.format(beta))
+            ax.set_xlim([0, steps])
+            ax.set_ylim([0, 500])
+
+        ax.set_xlabel('T')
         ax.set_ylabel('Interburst-interval distance')
-        # ax.set_title('{}ff'.format(len(simulation.firefly_array)))
+        ax.set_title('{}ff'.format(len(simulation.firefly_array)))
         plt.legend()
         plt.savefig('data/{}ff_interburst_interval_distances.png'.format(len(simulation.firefly_array)))

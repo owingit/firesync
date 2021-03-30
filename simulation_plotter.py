@@ -1,5 +1,6 @@
 import math
 import pickle
+import csv
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,7 +16,9 @@ class Plotter:
         self.now = now
 
     def plot_quiet_period_distributions(self, on_betas=False, path=None):
-        pickle_flag = True
+        """Grabs distributions from data and pickles for later plotting."""
+        use_pickle_plotter = True
+        pickle_flag = False
         if 'null' in path:
             is_null = True
         else:
@@ -76,25 +79,25 @@ class Plotter:
                 print('pickling {}+beta_sweep_swarm.pickle...'.format(path))
                 pickle.dump(swarm_interburst_interval_distribution, f_s)
 
-        # using pickle plotter right now, so this is commented out in the meantime
-        # if len(ob_interburst_interval_distribution.items()) > 0:
-        #     # s_means, s_stds, i_means, i_stds = self.calc_means_stds(ob_interburst_interval_distribution,
-        #     #                                                         ob_swarm_interburst_interval_distribution,
-        #     #                                                         on_betas=on_betas)
-        #     self._plot_histograms(ob_interburst_interval_distribution,
-        #                           ob_swarm_interburst_interval_distribution,
-        #                           on_betas=on_betas)
-        #     self._plot_all_histograms(ob_interburst_interval_distribution,
-        #                               ob_swarm_interburst_interval_distribution,
-        #                               obs=True, on_betas=on_betas)
-        # else:
-        #     # s_means, s_stds, i_means, i_stds = self.calc_means_stds(interburst_interval_distribution,
-        #     #                                                         swarm_interburst_interval_distribution,
-        #     #                                                         on_betas=on_betas)
-        #     self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
-        #                           on_betas=on_betas)
-        #     self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
-        #                               on_betas=on_betas)
+        if not use_pickle_plotter:
+            if len(ob_interburst_interval_distribution.items()) > 0:
+                # s_means, s_stds, i_means, i_stds = self.calc_means_stds(ob_interburst_interval_distribution,
+                #                                                         ob_swarm_interburst_interval_distribution,
+                #                                                         on_betas=on_betas)
+                self._plot_histograms(ob_interburst_interval_distribution,
+                                      ob_swarm_interburst_interval_distribution,
+                                      on_betas=on_betas)
+                self._plot_all_histograms(ob_interburst_interval_distribution,
+                                          ob_swarm_interburst_interval_distribution,
+                                          obs=True, on_betas=on_betas)
+            else:
+                # s_means, s_stds, i_means, i_stds = self.calc_means_stds(interburst_interval_distribution,
+                #                                                         swarm_interburst_interval_distribution,
+                #                                                         on_betas=on_betas)
+                self._plot_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
+                                      on_betas=on_betas)
+                self._plot_all_histograms(interburst_interval_distribution, swarm_interburst_interval_distribution,
+                                          on_betas=on_betas)
 
     @staticmethod
     def _plot_all_histograms(individual, group, obs=False, on_betas=False):
@@ -173,48 +176,69 @@ class Plotter:
             independent_var = 'ff'
         else:
             independent_var = 'beta_20ff'
-        dicts = [individual, group]
+        dicts = [group]
         for i, d in enumerate(dicts):
             for identifier, results in d.items():
                 fig, ax = plt.subplots()
                 ax.set_xlabel('Interburst interval [s]')
                 ax.set_ylabel('Freq count')
-                ax.set_xlim(0, 100)
                 for k, iid_list in results.items():
-                    iids = [x for iid in iid_list for x in iid]
+                    _iids = [x / 10 for iid in iid_list for x in iid]
+                    iids = [i for i in _iids if i > 3]
                     if k == 1:
                         ax.set_xlim(0, 500)
-                        bins = 50
                     else:
-                        bins = 20
-                    ax.hist(iids, density=True, bins=bins, color='cyan', edgecolor='black')
+                        ax.set_xlim(0, 120)
+                    x = []
+                    y = []
+                    y_maybes = []
+                    datafile = 'data/raw_experiment_results/3_22/silo/10ff/ibs10ff.csv'
+                    with open(datafile, 'r') as csvfile:
+                        plots = csv.reader(csvfile, delimiter=',')
+                        for i, row in enumerate(plots):
+                            x.append(i)
+                            y_maybe = float(row[0])
+                            y_maybes.append(y_maybe)
+                            if y_maybe > 3:
+                                y.append(y_maybe)
+
+                    # ccdfx, ccdfy = ccdf(np.array(y))
+                    ys, bin_edges = np.histogram(y, bins=np.arange(0, 1000, 3.0), density=True)
+                    y_heights = [height for height in ys]
+
+                    y_heights.append(0.0)
+                    bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+                    ax.hist(y, bins=np.arange(0, 1000, 3.0), color='red', edgecolor='black', label='experimental',
+                            density=True,
+                            alpha=0.5)
+                    ax.hist(iids, density=True, bins=np.arange(0, 1000, 3.0), color='cyan', edgecolor='black', alpha=0.5)
                     trials = len(iids)
-                    if i == 0:
-                        if type(i_means[k]) is not str:
-                            mean = math.floor(i_means[k])
-                            std = math.floor(i_stds[k])
-                        else:
-                            mean = 'xx'
-                            std = 'xx'
-                        if trials > 1:
-                            string = 'Individual_avg_over_' + str(trials) + '_{}mean_{}std'.format(mean, std)
-                        else:
-                            string = 'Individual_avg' + '_{}mean_{}std'.format(mean, std)
-                        if '_obstacles' in identifier:
-                            string = 'obs' + string
+                    # if i == 0:
+                    #     if type(i_means[k]) is not str:
+                    #         mean = math.floor(i_means[k])
+                    #         std = math.floor(i_stds[k])
+                    #     else:
+                    #         mean = 'xx'
+                    #         std = 'xx'
+                    #     if trials > 1:
+                    #         string = 'Individual_avg_over_' + str(trials) + '_{}mean_{}std'.format(mean, std)
+                    #     else:
+                    #         string = 'Individual_avg' + '_{}mean_{}std'.format(mean, std)
+                    #     if '_obstacles' in identifier:
+                    #         string = 'obs' + string
+                    # else:
+                    if type(s_means[k]) is not str:
+                        mean = math.floor(s_means[k])
+                        std = math.floor(s_stds[k])
                     else:
-                        if type(s_means[k]) is not str:
-                            mean = math.floor(s_means[k])
-                            std = math.floor(s_stds[k])
-                        else:
-                            mean = 'xx'
-                            std = 'xx'
-                        if trials > 1:
-                            string = 'Swarm_avg_over_' + str(trials) + '_{}mean_{}std'.format(mean, std)
-                        else:
-                            string = 'Swarm_avg' + '_{}mean_{}std'.format(mean, std)
-                        if '_obstacles' in identifier:
-                            string = 'obs' + string
+                        mean = 'xx'
+                        std = 'xx'
+                    if trials > 1:
+                        string = 'Swarm_avg_over_' + str(trials) + '_{}mean_{}std'.format(mean, std)
+                    else:
+                        string = 'Swarm_avg' + '_{}mean_{}std'.format(mean, std)
+                    if '_obstacles' in identifier:
+                        string = 'obs' + string
                     plt.title('{}{}_{}mean_{}std'.format(
                         k,
                         independent_var,

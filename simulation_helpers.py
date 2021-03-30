@@ -108,7 +108,7 @@ def cluster_indices(label, labels):
 
 def get_initial_interburst_interval(limit):
     show_it = False
-    with open('data/ib01ff.csv', newline='') as f:
+    with open('data/ibs01ff.csv', newline='') as f:
         reader = csv.reader(f)
         data = list(reader)
 

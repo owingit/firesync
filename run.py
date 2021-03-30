@@ -37,9 +37,9 @@ DISTANCE_KEY = 'distances'
 
 USE_KURAMATO = False
 DUMP_DATA = True
-DO_PLOTTING = True
+DO_PLOTTING = False
 DUMP_PICKLES = True
-TIME_SERIES_ANALYSIS = False
+TIME_SERIES_ANALYSIS = True
 
 
 def main():
@@ -73,10 +73,10 @@ def main():
         experiment_results = run_simulations(simulations, use_processes=True)
         if DUMP_DATA:
             write_results(experiment_results, now)
-        # if DO_PLOTTING:
-        #     plotter = sp.Plotter(experiment_results, now)
-        #     plotter.plot_example_animations()
-        #     plotter.plot_quiet_period_distributions(on_betas=True)
+        if DO_PLOTTING:
+            plotter = sp.Plotter(experiment_results, now)
+            plotter.plot_example_animations()
+            plotter.plot_quiet_period_distributions(on_betas=True)
 
     # or run the default settings
     else:
@@ -88,13 +88,13 @@ def main():
     if TIME_SERIES_ANALYSIS:
         tsa = time_series_analysis.TSA(experiment_results, now)
         tsa.fourier_transform()
-        # tsa.width_histogram()
-        # tsa.plot_interburst_intervals()
+        tsa.plot_widths()
+        tsa.plot_interburst_intervals()
     if DO_PLOTTING:
         plotter = sp.Plotter(experiment_results, now)
         plotter.plot_example_animations()
-        # plotter.compare_time_series()
-        # plotter.compare_simulations()
+        plotter.compare_time_series()
+        plotter.compare_simulations()
         plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
@@ -130,8 +130,8 @@ def process_json_db(program_argv, experiment_results):
                 if raw_experiment_results:
                     experiment_results.update(
                         process_results_from_written_file(raw_experiment_results, obstacle_flag))
-                # else:
-                #     raise TypeError("json data expected!")
+                else:
+                    raise TypeError("json data expected!")
         else:
             obstacle_flag = False
             if 'obstacles' in db:
@@ -146,6 +146,11 @@ def process_json_db(program_argv, experiment_results):
 
 
 def load_experiment_results(db_file):
+    """Loads data from database file
+
+    :param db_file: path to json file
+    :returns python dict from json data, or None if the file was not formatted correctly
+    """
     json_d = {}
     if '.json' in db_file:
         with open(db_file, 'rb+') as data:
@@ -163,6 +168,13 @@ def load_experiment_results(db_file):
 
 
 def process_results_from_written_file(raw_experiment_results, if_obstacles, if_kuramato=USE_KURAMATO):
+    """Convert saved data into dummy simulation and save in dictionary.
+
+    :param raw_experiment_results: file path
+    :param if_obstacles: obstacle flag
+    :param if_kuramato: kuramato flag
+    :returns dictionary of data
+    """
     name = list(raw_experiment_results.keys())[0]
     retdict = {name: []}
 
@@ -175,6 +187,7 @@ def process_results_from_written_file(raw_experiment_results, if_obstacles, if_k
 
 
 def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experiment_results, if_obstacles, if_kuramato):
+    """Create a dummy simulation from raw results."""
     num_steps = len(raw_experiment_results[name][0].get(TRACE_KEY)[0].keys())
     data = raw_experiment_results[name][index]
     num_agents = len(list(data.get(TRACE_KEY)))
@@ -211,6 +224,16 @@ def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experim
 
 
 def set_constants(sl=None, sc=None, nao=None, nt=None, betas=None, epsilon_deltas=None):
+    """Set up experiment constants.
+
+    :param sl: side length
+    :param sc: steps
+    :param nao: list of number of agent values
+    :param nt: number of trials
+    :param betas: list of beta values
+    :param epsilon_deltas: list of voltage spans
+    :returns dict of values
+    """
     if not sl:
         side_length = 16
     else:
@@ -253,6 +276,7 @@ def set_constants(sl=None, sc=None, nao=None, nt=None, betas=None, epsilon_delta
 
 
 def write_results(experiment_results, now):
+    """Dump results to json format."""
     write_networks = False
     for k in experiment_results.values():
         dict_to_dump = {}
@@ -287,6 +311,7 @@ def write_results(experiment_results, now):
 
 
 def write_network_data(experiment, now):
+    """Outdated. Writes network data to .gml format."""
     if len(experiment.firefly_array) > 1:
         if experiment.obstacles:
             end_folder = '/with_obstacles'
@@ -326,13 +351,13 @@ def setup_simulations(params, use_obstacles=False):
     trial=number of trials. All these values are held in the params dict.
     Right now, side length and step count are held as constants, but the params dict could easily pass those as lists
     and add to the combinatorics by iterating through each of those as well.
-
     """
     simulations = generate_simulations(params, use_obstacles)
     return simulations
 
 
 def generate_simulations(params, use_obstacles):
+    """Instantiate simulations."""
     for thetastar in params[TSTARS]:
         for num_agents in params[NUM_AGENTS]:
             for coupling_strength in params[KS]:
@@ -405,6 +430,7 @@ def run_simulations(simulations, use_processes=True):
 
 
 def run_simulation_in_process(simulation):
+    """Wrapper around the multiprocessing run."""
     print('running: with {} agents'.format(simulation.total_agents))
     simulation.run()
     return simulation

@@ -1,5 +1,6 @@
 import collections
 import math
+import copy
 import random
 
 import pickle
@@ -153,7 +154,6 @@ class Simulation:
         """
         Run the simulation. At each timestep, a firefly moves in relation to obstacles present and
         experiences phase interactions, either by slightly modified Kuramato model interactions or
-        TODO: integrate and fire reactions.
         """
         logging = False
         for step in range(1, self.steps):
@@ -163,44 +163,28 @@ class Simulation:
                 firefly.move(step, self.obstacles)
             if self.use_kuramato:
                 self.kuramato_phase_interactions(step)
-                phase_zero_fireflies = [ff
-                                        for ff in self.firefly_array
-                                        if 0 <= ff.phase[step] < 1 or 359 < ff.phase[step] <= 360
-                                        # or ((ff.phase[step-1] + ff.phase[step] - 2 * (360 - ff.phase[step-1])) % 360 <= math.degrees(self.Tb))
-                                        ]
-                if phase_zero_fireflies:
-                    phase_zero_fit = np.polyfit(
-                        [ff.positionx[step] for ff in phase_zero_fireflies],
-                        [ff.positiony[step] for ff in phase_zero_fireflies],
-                        1)
-                else:
-                    phase_zero_fit = self.wave_statistics[step - 1]['regression']
-                self.wave_statistics[step]['count'] = len(phase_zero_fireflies)
-                self.wave_statistics[step]['regression'] = phase_zero_fit
-                ff_phases = [ff.phase[step] for ff in self.firefly_array]
-                mean_resultant_vector_length = self.circ_r(np.array(ff_phases))
-                self.mean_resultant_vector_length[step] = float(mean_resultant_vector_length)
 
             if self.use_integrate_and_fire:
                 self.integrate_and_fire_interactions(step)
 
-            flashers_at_time_t = [(ff.positionx[step], ff.positiony[step], ff.number)
-                                  for ff in self.firefly_array if ff.flashed_at_this_step[step]]
+            # flashers_at_time_t = [(ff.positionx[step], ff.positiony[step], ff.number)
+            #                       for ff in self.firefly_array if ff.flashed_at_this_step[step]]
 
             # self.distance_statistics[step] = {'length': len(flashers_at_time_t),
             #                                   'positions': flashers_at_time_t}
-            if self.use_networks:
-                self.cascade_logic(step)
+            # if self.use_networks:
+            #     self.cascade_logic(step)
+            #
+            #     self.sort_networks_into_cascades()
+            #     for e in self.connected_temporal_networks.keys():
+            #         simulation_helpers._visualize(
+            #             self.connected_temporal_networks[e], self.indices_in_cascade_[e], self.n
+            #         )
 
-                self.sort_networks_into_cascades()
-                for e in self.connected_temporal_networks.keys():
-                    simulation_helpers._visualize(
-                        self.connected_temporal_networks[e], self.indices_in_cascade_[e], self.n
-                    )
         self.has_run = True
 
     def look(self, step):
-        """Find neighbors in line of sight.
+        """Find neighbors in line of sight. Set limited to true to explore varying the FoV.
 
         Options:
         1. All-to-all adjacency matrix.
@@ -223,7 +207,7 @@ class Simulation:
                         if skip_dist:
                             continue
                         else:
-                            if ff_j.flashed_at_this_step[step-1]:
+                            if ff_j.flashed_at_this_step[step - 1]:
                                 neighbors[ff_i.number].append(ff_j)
                     elif limited:
                         i_direction = ff_i.direction[step]
@@ -232,7 +216,7 @@ class Simulation:
                         a = [ff_i.positionx[step], ff_i.positiony[step]]
                         b = [ff_j.positionx[step], ff_j.positiony[step]]
 
-                        if i_left_range < math.atan2(np.norm(np.cross(a, b)), np.dot(a, b)) < i_right_range:
+                        if i_left_range < math.atan2(np.linalg.norm(np.cross(a, b)), np.dot(a, b)) < i_right_range:
                             if ff_j.flashed_at_this_step[step - 1]:
                                 neighbors[ff_i.number].append(ff_j)
                     else:
@@ -250,128 +234,72 @@ class Simulation:
             beta_addition = 0
             if neighbors_of_i:
                 for ff_j in neighbors_of_i:
-                    beta_addition += ff_i.beta / len(neighbors_of_i) * (1 - ff_j.is_charging)
+                    beta_addition += ff_i.beta / len(self.firefly_array) * (1 - ff_j.is_charging)
 
-            ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step - 1] + ((dvt + beta_addition) * self.timestepsize)
+            ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step - 1] + (dvt + (ff_i.sign * beta_addition) * self.timestepsize)
 
     def integrate_and_fire_interactions(self, step):
+        """
+        At timestep step:
+        Look around, receive pulsatile inputs, update voltages, update epsilon, flash if possible.
+        """
         neighbors = self.look(step)
         self.listen(step, neighbors)
         self.update_epsilon_and_readiness(step)
-        min_qps = {}
-        for i in neighbors.keys():
-            ff_i = self.firefly_array[i]
-            min_qp = ff_i.quiet_period if neighbors.get(i) else None
-            for neighbor in neighbors[i]:
-                if neighbor.quiet_period < min_qp:
-                    min_qp = neighbor.quiet_period
-            min_qps[i] = min_qp
-        for number in min_qps.keys():
-            ff_to_update = self.firefly_array[number]
-            ff_to_update.update_phrase_duration(min_qps[number])
-
-        # influential_neighbors = self.update_voltages(step)
-
-        # for ff in self.firefly_array:
-        #     if step in ff.ends_of_bursts and ff.sign == 1:
-        #        ff.update_phrase_duration(None)
-        # for ff, neighbor_qps in influential_neighbors.items():
-        #     _min_qp = min(neighbor_qps) if neighbor_qps else None
-        #     if _min_qp is not None and ff.sign == 1:
-        #         min_phrase = min(_min_qp, ff.quiet_period)
-        #         ff.update_phrase_duration(min_phrase)
-        #
-        #     else:
-        #         if step in ff.ends_of_bursts and ff.sign == 1:
-        #             ff.update_phrase_duration(None)
 
     def update_epsilon_and_readiness(self, step):
-        # update epsilon and readiness
+        """Set epsilon based on voltage for all fireflies, flash if possible."""
         for i in range(0, self.total_agents):
             ff_i = self.firefly_array[i]
 
             # update epsilon to discharging (V is high enough)
-            if ff_i.voltage_instantaneous[step - 1] >= ff_i.discharging_threshold:
-                if ff_i.in_burst is False and (step - ff_i.ends_of_bursts[-1] > ff_i.quiet_period) and ff_i.sign == 1:
+            if ff_i.voltage_instantaneous[step] >= ff_i.discharging_threshold:
+                if ff_i.in_burst is False and ff_i.sign == 1:
                     ff_i.set_ready()
-                elif ff_i.in_burst is False and len(ff_i.steps_with_flash) == 0 and ff_i.sign == 1:
-                    ff_i.set_ready()
-                # elif ff_i.sign == -1:
-                #     bs = []
-                #     for j in range(0, self.total_agents):
-                #         if i == j:
-                #             continue
-                #         else:
-                #             ff_j = self.firefly_array[j]
-                #             if ff_j.starts_of_bursts:
-                #                 bs.append(ff_j.ends_of_bursts[-1])
-                #     burstends = sorted([b for b in bs if b != 0])
-                #     if burstends and step - burstends[-1] > ff_i.quiet_period:
-                #         ff_i.set_ready()
-                #     # elif step - ff_i.ends_of_bursts[-1] > ff_i.phrase_duration:
-                #     #     ff_i.set_ready()
+                elif ff_i.in_burst is True and ff_i.sign == 1:
+                    ff_i.unset_ready()
+
+                elif ff_i.sign == -1:
+                    bs = []
+                    for j in range(0, self.total_agents):
+                        if i == j:
+                            continue
+                        else:
+                            ff_j = self.firefly_array[j]
+                            if ff_j.starts_of_bursts:
+                                bs.append(ff_j.ends_of_bursts[-1])
+                    burstends = sorted([b for b in bs if b != 0])
+                    if burstends and step - burstends[-1] > ff_i.quiet_period:
+                        ff_i.set_ready()
+                        ff_i.is_charging = 0
+
                 else:
                     ff_i.unset_ready()
-                ff_i.is_charging = 0
+                if ff_i.sign == 1:
+                    ff_i.is_charging = 0
 
             # update epsilon to charging if agent flashes
-            elif ff_i.voltage_instantaneous[step - 1] <= ff_i.charging_threshold:
-                ff_i.is_charging = 1
+            elif ff_i.voltage_instantaneous[step] <= ff_i.charging_threshold:
+                if ff_i.in_burst is False:
+                    ff_i.is_charging = 1
                 ff_i.unset_ready()
+            self.flash_conditions(ff_i, step)
 
-            if ff_i.is_charging == 0 and ff_i.ready:
-                ff_i.flash(step)
+    @staticmethod
+    def flash_conditions(ff, t):
+        """When to flash for firefly ff at step t"""
+        if ff.is_charging == 0 and ff.ready and not ff.in_burst:
+            ff.flash(t)
 
-            elif ff_i.in_burst is True and step - ff_i.last_flashed_at > (ff_i.discharging_time + ff_i.charging_time):
-                ff_i.flash(step)
-
-    # def update_voltages(self, step):
-    #     influential_neighbors = {}
-    #     for i in range(0, self.total_agents):
-    #         ff_i = self.firefly_array[i]
-    #         influential_neighbors[ff_i] = []
-    #     for i in range(0, self.total_agents):
-    #         ff_i = self.firefly_array[i]
-    #
-    #         dvt = ff_i.set_dvt(step)
-    #
-    #         int_term = 0
-    #         for j in range(0, self.total_agents):
-    #             if i == j:
-    #                 continue
-    #             else:
-    #                 ff_j = self.firefly_array[j]
-    #                 if self.obstacles:
-    #                     skip_dist = self.evaluate_obstacles(ff_i, ff_j, step)
-    #                     if skip_dist:
-    #                         continue
-    #                     else:
-    #                         if 0 < ff_j.ends_of_bursts[-1] <= step:
-    #                             influential_neighbors[ff_i].append(ff_j.quiet_period)
-    #                         # int_term = int_term - (
-    #                         #         ff_i.sign * ff_i.beta / len(self.firefly_array) * (
-    #                         #             ff_i.is_charging - ff_j.is_charging))
-    #                         if ff_i.sign == -1:
-    #                             int_term = int_term + (ff_i.sign * ff_i.beta / len(self.firefly_array) * (0 - ff_j.is_charging))
-    #                         else:
-    #                             int_term = int_term + (ff_i.sign * ff_i.beta / len(self.firefly_array) * (1 - ff_j.is_charging))
-    #                 else:
-    #                     if 0 < ff_j.ends_of_bursts[-1] <= step:
-    #                         influential_neighbors[ff_i].append(ff_j.quiet_period)
-    #                     # int_term = int_term - (
-    #                     #         ff_i.sign * ff_i.beta / len(self.firefly_array) * (ff_i.is_charging - ff_j.is_charging))
-    #                     if ff_i.sign == -1:
-    #                         int_term = int_term + (
-    #                                     ff_i.sign * ff_i.beta / len(self.firefly_array) * (0 - ff_j.is_charging))
-    #                     else:
-    #                         int_term = int_term + (
-    #                                     ff_i.sign * ff_i.beta / len(self.firefly_array) * (1 - ff_j.is_charging))
-    #
-    #         # this is what one firefly contributes to the charging / discharging
-    #         ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step-1] + (dvt + int_term) * self.timestepsize
-    #     return influential_neighbors
+        elif ff.in_burst is True and t - ff.last_flashed_at > (ff.discharging_time + ff.charging_time):
+            ff.flash(t)
 
     def evaluate_obstacles(self, ff_i, ff_j, step):
+        """Agents ff_i and ff_j see if obstacles are between them.
+
+        :param ff_i, ff_j: firefly objects
+        :param step: timestep
+        :returns whether these agents should skip their interaction (True means obstacle was between them)"""
         skip = False
         line = simulation_helpers.generate_line_points(
             (ff_i.positionx[step], ff_i.positiony[step]),
@@ -387,7 +315,10 @@ class Simulation:
         return skip
 
     def kuramato_phase_interactions(self, step):
-        """Each firefly's phase wave interacts with the phase wave of its detectable neighbors by the Kuramato model."""
+        """
+        OUTDATED.
+        Each firefly's phase wave interacts with the phase wave of its detectable neighbors by the Kuramato model.
+        """
         for i in range(0, self.total_agents):
             ff_i = self.firefly_array[i]
             kuramato = 0
@@ -415,6 +346,23 @@ class Simulation:
             if phase_key < 0:
                 phase_key += 360
             self.num_fireflies_with_phase_x[step][phase_key] += 1
+        phase_zero_fireflies = [ff
+                                for ff in self.firefly_array
+                                if 0 <= ff.phase[step] < 1 or 359 < ff.phase[step] <= 360
+                                # or ((ff.phase[step-1] + ff.phase[step] - 2 * (360 - ff.phase[step-1])) % 360 <= math.degrees(self.Tb))
+                                ]
+        if phase_zero_fireflies:
+            phase_zero_fit = np.polyfit(
+                [ff.positionx[step] for ff in phase_zero_fireflies],
+                [ff.positiony[step] for ff in phase_zero_fireflies],
+                1)
+        else:
+            phase_zero_fit = self.wave_statistics[step - 1]['regression']
+        self.wave_statistics[step]['count'] = len(phase_zero_fireflies)
+        self.wave_statistics[step]['regression'] = phase_zero_fit
+        ff_phases = [ff.phase[step] for ff in self.firefly_array]
+        mean_resultant_vector_length = self.circ_r(np.array(ff_phases))
+        self.mean_resultant_vector_length[step] = float(mean_resultant_vector_length)
 
     def animate_phase_bins(self, now, write_gif=False, show_gif=False):
         """Animate the # of ff's in each phase (0 -> 2*pi) over time."""
@@ -471,6 +419,7 @@ class Simulation:
 
         # uncomment for velocity line
         def animate(i, flies, lines): # wavestats): #wave):
+            """Animate walks."""
             for line, fly in zip(lines, flies):
                 if not fly.trace.get(i):
                     step_key = str(i)
@@ -502,6 +451,7 @@ class Simulation:
             #     all_xs = [fly.positionx for fly in flies if fly.flashed_at_this_step[i]]
             # wave.set_xdata(all_xs)
             # wave.set_ydata(wavestats[i]['regression'][0] * np.asarray(all_xs) + wavestats[i]['regression'][1])
+
             if self.use_kuramato:
                 title_str = "Kuramato Model"
             else:
@@ -535,6 +485,7 @@ class Simulation:
             plt.show()
 
     def set_save_string(self, plot_type, now):
+        """Sets up default save string."""
         if plot_type == 'phaseanim' or plot_type == 'numphaseovertime':
             end = '.mp4'
         else:
@@ -580,13 +531,13 @@ class Simulation:
         if not shared_ax:
             ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
             bursts_at_each_timestep = self.get_burst_data()
-            female_bursts_at_each_timestep = self.get_burst_data_from_females()
+            # female_bursts_at_each_timestep = self.get_burst_data_from_females()
             ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()),
                     label=label, color=color, lw=1)
             # ax.plot(list(female_bursts_at_each_timestep.keys()), list(female_bursts_at_each_timestep.values()),
             #         label='female', color='orange', lw=1)
 
-            ax.set_xlim([last_highest, self.steps])
+            ax.set_xlim(0, self.steps)
             ax.set_xlabel('Step')
 
             ax.set_ylim([0.0, self.total_agents])
@@ -736,6 +687,12 @@ class Simulation:
         return flat_interburst_distribution
 
     def peak_variances(self, thresh):
+        """Finds peaks and the variances of the burst regions around them.
+
+        :returns dict of peak locations
+        :returns dict of peak heights
+        :returns int of step of last tallest peak
+        :returns dict of variances"""
         _prominences = {
             1: 1.0,
             5: 2.0,
@@ -788,46 +745,42 @@ class Simulation:
                 last_high_step = mids[e] * 10
         return peaks, peak_heights, last_high_step, variances
 
-    def temporal_interburst_dist(self, thresh):
-        _prominences = {
-            1: 1.0,
-            5: 2.0,
-            10: 3.0,
-            15: 4.0,
-            20: 5.0
-        }
-        _x = self.get_burst_data()
-        prominences = peak_prominences(list(_x.values())[thresh:], find_peaks(list(_x.values())[thresh:])[0], wlen=30)
+    def temporal_interburst_dist(self, thresh=None):
+        """Returns dict of inter-burst intervals over time."""
+        starts_of_bursts = {}
+        for firefly in self.firefly_array:
+            j = 0
+            starts_of_bursts[firefly.number] = []
+            flashes = firefly._flashes_per_burst[j]
+            for i, yes in enumerate(firefly.flashed_at_this_step[0:]):
+                if yes and flashes == firefly._flashes_per_burst[j]:
+                    starts_of_bursts[firefly.number].append(i)
+                    flashes -= 1
+                else:
+                    if yes:
+                        flashes -= 1
+                        if flashes == 0:
+                            j += 1
+                            flashes = firefly._flashes_per_burst[j]
+        longest_list = max(list(starts_of_bursts.values()), key=lambda l: len(l))
+        number_of_bursts = len(longest_list)
 
-        prominence_threshold = _prominences[len(self.firefly_array)]
-        try:
-            peaks_of_x = find_peaks(list(_x.values())[thresh:],
-                                    height=prominence_threshold,
-                                    distance=50
-                                    )
-            if len(peaks_of_x[0]) < 5:
-                raise RuntimeError('Not enough peeeeeeks')
-        except RuntimeError:
-            try:
-                peaks_of_x = find_peaks(list(_x.values())[thresh:],
-                                        prominence=2.0,
-                                        distance=50
-                                        )
-                if len(peaks_of_x[0]) < 5:
-                    raise RuntimeError('Not enough peeeeeeks')
-            except RuntimeError:
-                peaks_of_x = find_peaks(list(_x.values())[thresh:],
-                                        prominence=1.0,
-                                        distance=50
-                                        )
+        # pad shorties
+        for k, burst in starts_of_bursts.items():
+            if len(burst) < number_of_bursts:
+                starts_of_bursts[k].extend([float("inf")] * (number_of_bursts - len(burst)))
 
-        peaks = [peak / 10 for peak in peaks_of_x[0]]
-
-        interbursts = {}
-        for i in range(len(peaks) - 1):
-            interburst = peaks[i + 1] - peaks[i]
-            interbursts[i] = interburst
-        return interbursts
+        collective_burst_starts = []
+        for index in range(0, number_of_bursts):
+            starting_points = np.array([burst[index] for burst in list(starts_of_bursts.values())])
+            collective_burst_starts.append(np.mean(starting_points[starting_points < 1000000]))
+        collective_interburst_distribution = np.array([collective_burst_starts[i + 1] - collective_burst_starts[i]
+                                                       for i in range(len(collective_burst_starts) - 1)])
+        temporal_interbursts = {}
+        for i in range(len(collective_burst_starts) - 1):
+            interburst = collective_burst_starts[i + 1] - collective_burst_starts[i]
+            temporal_interbursts[i] = interburst
+        return temporal_interbursts
 
     def swarm_interburst_dist(self, is_null=False):
         """Calculate the distribution of interburst intervals for the collective bursting events.
@@ -864,9 +817,12 @@ class Simulation:
             collective_burst_starts.append(np.mean(starting_points[starting_points < 1000000]))
         collective_interburst_distribution = np.array([collective_burst_starts[i+1] - collective_burst_starts[i]
                                                        for i in range(len(collective_burst_starts)-1)])
+        temporal_interbursts = {}
+        for i in range(len(collective_interburst_distribution) - 1):
+            interburst = collective_interburst_distribution[i + 1] - collective_interburst_distribution[i]
+            temporal_interbursts[i] = interburst
 
         peaks, _, last_high_step, _ = self.peak_variances(thresh=0)
-        # peaks, _, _, _ = self.peak_variances(thresh=-int(last_high_step))
 
         _collective_interburst_distribution = [peaks[i+1] - peaks[i]
                                                for i in range(len(peaks)-1)
@@ -876,16 +832,15 @@ class Simulation:
                 collective_interburst_distribution > 0
             ]
 
-        # km = skl_cluster.KMeans(n_clusters=number_of_bursts, max_iter=1000)
-        # e = km.fit(np.array(all_flashes).reshape(-1, 1))
-        # ccs = sorted([cc[0] for cc in e.cluster_centers_])
-        # c_i_d = [(ccs[i+1] - ccs[i]) / 10 for i in range(len(ccs)-1)]
-
         cid = np.array(_collective_interburst_distribution)
 
         return cid
 
     def get_burst_data(self):
+        """Male bursts.
+
+        :returns dict of flash counts at timesteps
+        """
         to_plot = {i: 0 for i in range(self.steps)}
         for step in range(self.steps):
             for firefly in self.firefly_array:
@@ -894,6 +849,10 @@ class Simulation:
         return to_plot
 
     def get_burst_data_from_females(self):
+        """Female bursts.
+
+        :returns dict of flash counts at timesteps
+        """
         to_plot = {i: 0 for i in range(self.steps)}
         for step in range(self.steps):
             for firefly in self.firefly_array:
@@ -902,6 +861,7 @@ class Simulation:
         return to_plot
 
     def cascade_logic(self, step):
+        """Outdated. Make cascades from flash timeseries."""
         if step % self.delta_t == 0 and step is not 0:
             network = nx.DiGraph()
             # save all the flashers
@@ -939,6 +899,7 @@ class Simulation:
                 self.delta_x[i] = math.sqrt(self.delta_t)
 
     def sort_networks_into_cascades(self):
+        """Outdated. Sorts networks into their corresponding cascades."""
         if len(self.firefly_array) > 1:
             sorted_networks = network_sorter.NetworkSort(self.firefly_array, self.steps,
                                                          self.firefly_array[0].get_phrase_duration())

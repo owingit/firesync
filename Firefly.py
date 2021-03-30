@@ -49,7 +49,8 @@ class Firefly:
         self.ready = False
         self.theta_star = tstar
         self.timestepsize = 0.1
-        self.sign = 1 #np.random.choice([1, -1], p=[0.90, 0.10])
+
+        self.sign = 1
         # if self.number == 0:
         #     self.sign = -1
 
@@ -58,9 +59,8 @@ class Firefly:
 
         # integrate and fire params
         self.beta = beta
-        self.charging_time = np.random.normal(loc=4.5, scale=1) + 0.01
-        self.discharging_time = np.random.normal(loc=1.1, scale=0.3) + 0.01
-        self.is_charging = 1
+        self.charging_time = self.sample_ct()
+        self.discharging_time = self.sample_dt()
         self.voltage_threshold = 1
         self.epsilon_delta = epsilon_delta
         self.discharging_threshold = 2 * (self.voltage_threshold / 3)
@@ -68,27 +68,34 @@ class Firefly:
         self.in_burst = False
         self.voltage_instantaneous = np.zeros(steps)
         self.voltage_instantaneous[0] = random.random()
-        if self.sign == 1:
-            self.flashes_per_burst = int(np.random.choice([2, 3, 4, 5, 6], p=[0.05, 0.2, 0.4, 0.2, 0.15]))
+        if self.voltage_instantaneous[0] > self.discharging_threshold:
+            self.is_charging = 0
         else:
+            self.is_charging = 1
+        if self.sign == 1:
+            self.flashes_per_burst = self.sample_nf()
+        else:
+            # female defaults
             self.flashes_per_burst = 1
-            self.charging_time = 60 # np.random.normal(loc=60, scale=3)
+            self.charging_time = 60
             self.discharging_time = 1
         if phrase_duration == "distribution":
             if self.sign == 1:
                 self.phrase_duration = simulation_helpers.get_initial_interburst_interval(
-                   limit=2 * self.flashes_per_burst * (self.charging_time + self.discharging_time) / 10
+                   limit=2 * self.flashes_per_burst * (self.charging_time + self.discharging_time) * self.timestepsize
                 )
             else:
-                self.phrase_duration = 100 #np.random.normal(loc=100, scale=3)
+                # female defaults
+                self.phrase_duration = 100
         else:
             self.phrase_duration = phrase_duration  # timesteps, where each timestep = 0.1s
 
         self.flashes_left_in_current_burst = self.flashes_per_burst
+        self._flashes_per_burst = [self.flashes_per_burst]
         self.last_flashed_at = 0
         self.quiet_period = self.phrase_duration - (
-                 (self.charging_time + self.discharging_time) * self.flashes_per_burst
-        )
+                 (self.charging_time + self.discharging_time) * self.flashes_per_burst) * self.timestepsize
+
         self.flashed_at_this_step = [False] * steps
         self.steps_with_flash = []
         self.ends_of_bursts = [0]
@@ -109,13 +116,30 @@ class Firefly:
     def unset_ready(self):
         self.ready = False
 
+    @staticmethod
+    def sample_nf():
+        return int(np.random.choice([2, 3, 4, 5, 6], p=[(1/18), (2/18), (11/18), (3/18), (1/18)]))
+
+    @staticmethod
+    def sample_dt():
+        ps = [(1 / 76), (3 / 76), (6 / 76), (4 / 76), (19 / 76), (13 / 76), (14 / 76),
+              (11 / 76), (2 / 76), (1 / 76), (1 / 76), 0, 0, 0, 0, 0, 0, 0, (1 / 76)]
+        dt = int(np.random.choice(np.arange(1, 20, 1), p=ps))
+        return dt / 6
+
+    @staticmethod
+    def sample_ct():
+        ps = [(6 / 43), (10 / 43), (12 / 43), (7 / 43), (2 / 43), (2 / 43), (1 / 43), (0 / 43), (2 / 43), (1 / 43)]
+        ct = int(np.random.choice(np.arange(26, 36, 1), p=ps))
+        return ct / 6
+
     def get_phrase_duration(self):
         return self.phrase_duration
 
     def update_phrase_duration(self, fastest=None):
         if fastest is None:
             self.phrase_duration = simulation_helpers.get_initial_interburst_interval(
-                limit=2 * self.flashes_per_burst * (self.charging_time + self.discharging_time) / 10
+                limit=2 * self.flashes_per_burst * (self.charging_time + self.discharging_time) * self.timestepsize
             )
             self.update_quiet_period()
         else:
@@ -123,8 +147,7 @@ class Firefly:
 
     def update_quiet_period(self):
         self.quiet_period = self.phrase_duration - (
-                 (self.charging_time + self.discharging_time) * self.flashes_per_burst
-        )
+                 (self.charging_time + self.discharging_time) * self.flashes_per_burst) * self.timestepsize
 
     def move(self, current_step, obstacles, flip_direction=False):
         """Move a firefly through 2d space using a correlated 2d random walk."""
@@ -215,17 +238,22 @@ class Firefly:
         self.flashes_left_in_current_burst -= 1
         self.in_burst = True
         if self.flashes_left_in_current_burst == 0:
+
+            self.flashes_per_burst = self.sample_nf()
+            self._flashes_per_burst.append(self.flashes_per_burst)
+            self.charging_time = self.sample_ct()
+            self.discharging_time = self.sample_dt()
+            self.update_phrase_duration()
+
             self.in_burst = False
             self.unset_ready()
             self.flashes_left_in_current_burst = self.flashes_per_burst
             self.ends_of_bursts.append(t)
-            self.voltage_instantaneous[t-1] = self.charging_threshold - 0.01
-            self.is_charging = 1
 
     def set_dvt(self, t):
         prev_voltage = self.voltage_instantaneous[t - 1]
         if self.is_charging:
-            dvt = (math.log(2) / (self.charging_time)) * (self.voltage_threshold - prev_voltage)
+            dvt = ((math.log(2) / self.charging_time) * (self.voltage_threshold - prev_voltage)) / self.quiet_period
         else:
-            dvt = -(math.log(2) / (self.discharging_time)) * prev_voltage
+            dvt = (-(math.log(2) / self.discharging_time) * prev_voltage) / self.quiet_period
         return dvt
