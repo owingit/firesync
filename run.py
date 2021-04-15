@@ -36,10 +36,10 @@ OBSTACLE_KEY = 'obstacles'
 DISTANCE_KEY = 'distances'
 
 USE_KURAMATO = False
-DUMP_DATA = True
-DO_PLOTTING = False
+DUMP_DATA = False
+DO_PLOTTING = True
 DUMP_PICKLES = True
-TIME_SERIES_ANALYSIS = True
+TIME_SERIES_ANALYSIS = False
 
 
 def main():
@@ -76,7 +76,7 @@ def main():
         if DO_PLOTTING:
             plotter = sp.Plotter(experiment_results, now)
             plotter.plot_example_animations()
-            plotter.plot_quiet_period_distributions(on_betas=True)
+            # plotter.plot_quiet_period_distributions(on_betas=True)
 
     # or run the default settings
     else:
@@ -87,15 +87,15 @@ def main():
             write_results(experiment_results, now)
     if TIME_SERIES_ANALYSIS:
         tsa = time_series_analysis.TSA(experiment_results, now)
-        tsa.fourier_transform()
-        tsa.plot_widths()
-        tsa.plot_interburst_intervals()
+        # tsa.fourier_transform()
+        # tsa.plot_widths()
+        # tsa.plot_interburst_intervals()
     if DO_PLOTTING:
         plotter = sp.Plotter(experiment_results, now)
         plotter.plot_example_animations()
-        plotter.compare_time_series()
-        plotter.compare_simulations()
-        plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
+        # plotter.compare_time_series()
+        # plotter.compare_simulations()
+        # plotter.plot_quiet_period_distributions(on_betas=True, path=sys.argv[1])
         if USE_KURAMATO:
             plotter.plot_mean_vector_length_results()
     print("done")
@@ -108,7 +108,7 @@ def extract_range(arglist):
         if len(float_args) == 1:
             retlist = float_args
         else:
-            retlist = np.arange(float_args[0], float_args[1], 0.1)
+            retlist = np.arange(float_args[0], float_args[1], 0.04)
     else:
         retlist = None
     return retlist
@@ -195,7 +195,7 @@ def create_dummy_simulation_from_raw_experiment_results(name, index, raw_experim
     density = float(name.split('beta')[0].split('density')[0])
     side_length = math.sqrt((float(num_agents)) / density)
     phrase_duration = name.split('beta')[1].split('Tb')[0]
-    epsilon_delta = 0.3333 # placeholder
+    epsilon_delta = 0.3333  # placeholder
     if phrase_duration != 'distribution':
         phrase_duration = int(phrase_duration)
 

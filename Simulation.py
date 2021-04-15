@@ -159,6 +159,20 @@ class Simulation:
         for step in range(1, self.steps):
             if logging:
                 print(step)
+            if step % 5000 == 0:
+                print(step)
+                # count = len(self.firefly_array)
+                # self.firefly_array.append(Firefly.Firefly(
+                #     count, total=self.total_agents, tstar=self.thetastar,
+                #     tstar_range=simulation_helpers.TSTAR_RANGE,
+                #     n=self.n, steps=self.steps, r_or_u=self.r_or_u,
+                #     beta=self.beta,
+                #     phrase_duration=self.phrase_duration,
+                #     epsilon_delta=self.epsilon_delta,
+                #     use_periodic_boundary_conditions=False,
+                #     tb=self.Tb, obstacles=self.obstacles)
+                # )
+                # self.total_agents += 1
             for firefly in self.firefly_array:
                 firefly.move(step, self.obstacles)
             if self.use_kuramato:
@@ -232,10 +246,18 @@ class Simulation:
             dvt = ff_i.set_dvt(step)
             neighbors_of_i = neighbors[ff_i.number]
             beta_addition = 0
+            fastest_intervals = None
             if neighbors_of_i:
+                fastest_intervals = [np.inf, np.inf, np.inf]
                 for ff_j in neighbors_of_i:
+                    if ff_j.quiet_period < fastest_intervals[0]:
+                        fastest_intervals[0] = ff_j.quiet_period
+                    if ff_j.charging_time < fastest_intervals[1]:
+                        fastest_intervals[1] = ff_j.charging_time
+                    if ff_j.discharging_time < fastest_intervals[2]:
+                        fastest_intervals[2] = ff_j.discharging_time
                     beta_addition += ff_i.beta / len(self.firefly_array) * (1 - ff_j.is_charging)
-
+            ff_i.intervals.append(fastest_intervals)
             ff_i.voltage_instantaneous[step] = ff_i.voltage_instantaneous[step - 1] + (dvt + (ff_i.sign * beta_addition) * self.timestepsize)
 
     def integrate_and_fire_interactions(self, step):
@@ -246,6 +268,16 @@ class Simulation:
         neighbors = self.look(step)
         self.listen(step, neighbors)
         self.update_epsilon_and_readiness(step)
+        self.update_intervals(step)
+
+    def update_intervals(self, step):
+        for i in range(0, self.total_agents):
+            ff_i = self.firefly_array[i]
+            if ff_i.intervals[-1] is not None:
+                if ff_i.intervals[-1][0] < ff_i.quiet_period:
+                    ff_i.update_phrase_duration(ff_i.intervals[-1][0])
+                # ff_i.charging_time = ff_i.intervals[-1][1]
+                # ff_i.discharging_time = ff_i.intervals[-1][2]
 
     def update_epsilon_and_readiness(self, step):
         """Set epsilon based on voltage for all fireflies, flash if possible."""
@@ -484,39 +516,77 @@ class Simulation:
         if show_gif:
             plt.show()
 
-    def set_save_string(self, plot_type, now):
+    def set_save_string(self, plot_type, now, path):
         """Sets up default save string."""
-        if plot_type == 'phaseanim' or plot_type == 'numphaseovertime':
+        if 'phaseanim' in plot_type or 'numphaseovertime' in plot_type:
             end = '.mp4'
+        elif 'burst_dict' in plot_type:
+            end = '.pickle'
         else:
             end = '.png'
         if self.use_obstacles:
-            save_string = 'data/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}_obstacles{}'.format(
-                plot_type,
-                self.total_agents,
-                self.n, self.n,
-                self.beta,
-                self.phrase_duration,
-                self.coupling_strength,
-                self.steps,
-                self.r_or_u,
-                str(now).replace(' ', '_'),
-                end
-            )
+            if not path:
+                save_string = 'data/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}_obstacles{}'.format(
+                    plot_type,
+                    self.total_agents,
+                    self.n, self.n,
+                    self.beta,
+                    self.phrase_duration,
+                    self.coupling_strength,
+                    self.steps,
+                    self.r_or_u,
+                    str(now).replace(' ', '_'),
+                    end
+                )
+            else:
+                save_string = '{}/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}_obstacles{}'.format(
+                    path,
+                    plot_type,
+                    self.total_agents,
+                    self.n, self.n,
+                    self.beta,
+                    self.phrase_duration,
+                    self.coupling_strength,
+                    self.steps,
+                    self.r_or_u,
+                    str(now).replace(' ', '_'),
+                    end
+                )
         else:
-            save_string = 'data/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}{}'.format(
-                plot_type,
-                self.total_agents,
-                self.n, self.n,
-                self.beta,
-                self.phrase_duration,
-                self.coupling_strength,
-                self.steps,
-                self.r_or_u,
-                str(now).replace(' ', '_'),
-                end
+            if not path:
+                save_string = 'data/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}_obstacles{}'.format(
+                    plot_type,
+                    self.total_agents,
+                    self.n, self.n,
+                    self.beta,
+                    self.phrase_duration,
+                    self.coupling_strength,
+                    self.steps,
+                    self.r_or_u,
+                    str(now).replace(' ', '_'),
+                    end
+                )
+            else:
+                save_string = '{}/{}_{}agents_{}x{}_beta={}_Tb={}_k={}_steps={}_{}distribution{}_obstacles{}'.format(
+                    path,
+                    plot_type,
+                    self.total_agents,
+                    self.n, self.n,
+                    self.beta,
+                    self.phrase_duration,
+                    self.coupling_strength,
+                    self.steps,
+                    self.r_or_u,
+                    str(now).replace(' ', '_'),
+                    end
             )
         return save_string
+
+    def save_time_series(self, now, instance, path=None):
+        bursts_at_each_timestep = self.get_burst_data()
+        save_string = self.set_save_string('burst_dict{}'.format(instance), now, path)
+        with open(save_string, 'wb') as f:
+            pickle.dump(bursts_at_each_timestep, f, pickle.HIGHEST_PROTOCOL)
 
     def plot_bursts(self, now, instance, write_gif=False, show_gif=False, shared_ax=None, last_highest=0):
         """Plot the flash bursts over time"""
@@ -532,31 +602,37 @@ class Simulation:
             ax = plt.axes(xlim=(0, self.steps), ylim=(0, self.total_agents))
             bursts_at_each_timestep = self.get_burst_data()
             # female_bursts_at_each_timestep = self.get_burst_data_from_females()
-            ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()),
+            xs = [t / 10 for t in list(bursts_at_each_timestep.keys())]
+            ax.plot(xs, list(bursts_at_each_timestep.values()),
                     label=label, color=color, lw=1)
             # ax.plot(list(female_bursts_at_each_timestep.keys()), list(female_bursts_at_each_timestep.values()),
             #         label='female', color='orange', lw=1)
 
-            ax.set_xlim(0, self.steps)
-            ax.set_xlabel('Step')
+            ax.set_xlim(0, 1000)
+            ax.set_xlabel('T(s)')
 
-            ax.set_ylim([0.0, self.total_agents])
-            ax.set_ylabel('Number of flashers at timestep')
-            plt.title('Flashes over time' + self.boilerplate)
-            plt.legend()
-        else:
-            bursts_at_each_timestep = self.get_burst_data()
-            shared_ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()),
-                           label=label, color=color)
-
-        if not shared_ax:
+            ax.set_ylim([0.0, 10])
+            ax.set_ylabel('Number of flashers at time t')
+            plt.title('Time series {}ff'.format(self.total_agents))
+            # plt.legend()
             save_string = self.set_save_string('flashplot_{}'.format(instance), now)
 
             if write_gif:
                 plt.savefig(save_string)
                 plt.close()
-            if show_gif:
-                plt.show()
+        else:
+            bursts_at_each_timestep = self.get_burst_data()
+            shared_ax.plot(list(bursts_at_each_timestep.keys()), list(bursts_at_each_timestep.values()),
+                           label=label, color=color)
+
+        # if not shared_ax:
+        #     save_string = self.set_save_string('flashplot_{}'.format(instance), now)
+        #
+        #     if write_gif:
+        #         plt.savefig(save_string)
+        #         plt.close()
+        #     if show_gif:
+        #         plt.show()
 
     @staticmethod
     def setup_color_legend(axis, use_kuramato=True, use_integrate_and_fire=False):
